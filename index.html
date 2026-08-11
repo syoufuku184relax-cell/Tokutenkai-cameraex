@@ -37,30 +37,49 @@
         const displayCode = document.getElementById('display-code');
 
         let savedDateStr = "";
-        let savedCodeStr = "";
+        let currentCode = "";
+        
+        // 本日使用済みのコードを保持するリスト（重複防止）
+        const usedCodes = new Set();
 
-        function generateCode() {
+        // 紛らわしい文字(0, O, 1, I)を除いた4桁コード生成関数
+        function generateUniqueCode() {
             const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
             let code = "";
-            for (let i = 0; i < 4; i++) {
-                code += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return `No. ${code}`;
+            let attempts = 0;
+            
+            // 未使用のコードが生成されるまでループ
+            do {
+                code = "";
+                for (let i = 0; i < 4; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                attempts++;
+            } while (usedCodes.has(code) && attempts < 1000);
+
+            usedCodes.add(code);
+            return code;
         }
 
-        const now = new Date();
-        savedDateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-        savedCodeStr = generateCode();
-        displayDate.textContent = savedDateStr;
-        displayCode.textContent = savedCodeStr;
+        // 画面の「日付」と「認識番号」を最新化する処理
+        function updateDisplayInfo() {
+            const now = new Date();
+            savedDateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+            currentCode = generateUniqueCode();
 
-        // 起動をより柔軟に修正
+            displayDate.textContent = savedDateStr;
+            displayCode.textContent = `No. ${currentCode}`;
+        }
+
+        // 初期化（1枚目のコードを用意）
+        updateDisplayInfo();
+
+        // カメラ起動
         navigator.mediaDevices.getUserMedia({
             video: { facingMode: "environment" } 
         }).then(stream => {
             video.srcObject = stream;
         }).catch(() => {
-            // エラー時は標準カメラで再試行
             navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
                 video.srcObject = stream;
             }).catch(err => {
@@ -68,30 +87,43 @@
             });
         });
 
+        // 撮影・印字・保存処理
         snap.addEventListener('click', () => {
             if (!video.videoWidth) return;
+
+            // 1. キャンバス準備
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
+
+            // 2. 写真を描画
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+            // 3. 下部の黒帯を描画
             const boxHeight = canvas.height * 0.08;
             ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
             ctx.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
 
+            // 4. 文字印字（現在表示中の日付とコード）
             const fontSize = Math.floor(canvas.width * 0.038);
             ctx.font = `bold ${fontSize}px sans-serif`;
             ctx.fillStyle = "#ffffff";
             ctx.textBaseline = "middle";
+
             ctx.textAlign = "left";
             ctx.fillText(savedDateStr, fontSize, canvas.height - (boxHeight / 2));
-            ctx.textAlign = "right";
-            ctx.fillText(savedCodeStr, canvas.width - fontSize, canvas.height - (boxHeight / 2));
 
+            ctx.textAlign = "right";
+            ctx.fillText(`No. ${currentCode}`, canvas.width - fontSize, canvas.height - (boxHeight / 2));
+
+            // 5. 保存実行
             const link = document.createElement('a');
-            link.download = `tokuten_${savedDateStr.replace(/\//g, '')}_${savedCodeStr.replace('No. ', '')}.png`;
+            link.download = `tokuten_${savedDateStr.replace(/\//g, '')}_${currentCode}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
+
+            // 6. 【重要】保存完了後、次の撮影のために新しいコードを即座に発行！
+            updateDisplayInfo();
         });
     </script>
 </body>
