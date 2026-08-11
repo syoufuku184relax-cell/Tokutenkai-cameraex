@@ -7,7 +7,33 @@
     <style>
         body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; margin: 0; padding: 15px; }
         .container { max-width: 500px; margin: 0 auto; }
-        video { width: 100%; border-radius: 12px; background: #000; display: block; margin-bottom: 15px; }
+        
+        /* 撮影前のプレビュー表示エリア */
+        #preview-area {
+            position: relative;
+            width: 100%;
+            margin-bottom: 15px;
+            overflow: hidden;
+            border-radius: 12px;
+            background: #000;
+        }
+        video { width: 100%; display: block; }
+        
+        /* 画面上に重ねる情報表示 */
+        #overlay-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 0;
+            display: flex;
+            justify-content: space-around;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+        }
+
         button {
             width: 100%;
             padding: 18px;
@@ -27,7 +53,16 @@
 <body>
     <div class="container">
         <h2>特典会カメラ</h2>
-        <video id="video" autoplay playsinline></video>
+        
+        <div id="preview-area">
+            <video id="video" autoplay playsinline></video>
+            <!-- 撮影前に画面で確認できる情報 -->
+            <div id="overlay-info">
+                <span id="display-date">----/--/--</span>
+                <span id="display-code">No. ----</span>
+            </div>
+        </div>
+        
         <button id="snap">📸 撮影して自動保存</button>
         <canvas id="canvas"></canvas>
     </div>
@@ -36,6 +71,35 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const snap = document.getElementById('snap');
+        const displayDate = document.getElementById('display-date');
+        const displayCode = document.getElementById('display-code');
+
+        // 使用する日付データと認識番号
+        let savedDateStr = "";
+        let savedCodeStr = "";
+
+        // アルファベットと数字の4桁コードを生成 (紛らわしい 0, O, 1, I は除外)
+        function generateCode() {
+            const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+            let code = "";
+            for (let i = 0; i < 4; i++) {
+                code += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return `No. ${code}`;
+        }
+
+        // --- 画面表示用の情報を更新 ---
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        
+        savedDateStr = `${year}/${month}/${day}`; // 年月日のみ
+        savedCodeStr = generateCode(); // 英数4桁
+
+        // 画面に表示
+        displayDate.textContent = savedDateStr;
+        displayCode.textContent = savedCodeStr;
 
         // 外カメラを優先起動
         navigator.mediaDevices.getUserMedia({
@@ -49,7 +113,7 @@
             alert('カメラの起動に失敗しました: ' + err.message);
         });
 
-        // 撮影処理
+        // 撮影・合成・保存処理
         snap.addEventListener('click', () => {
             if (!video.videoWidth) return;
 
@@ -60,47 +124,28 @@
             // 1. 写真を描画
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // 2. 日付データと4桁の認識番号を作成
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            const seconds = String(now.getSeconds()).padStart(2, '0');
-            
-            const dateStr = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
-            
-            // 4桁のランダム認識番号（例: 4829）
-            const code = Math.floor(1000 + Math.random() * 9000);
-            const codeStr = `No. ${code}`;
-
-            // 3. 合成用背景帯を描画（文字を見やすくするため）
+            // 2. 合成用背景帯を描画（画面表示と同じ位置に）
             const boxHeight = canvas.height * 0.08; // 全体高の8%
             ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
             ctx.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
 
-            // 4. テキスト（日付・認識番号）を描画
+            // 3. テキスト（画面表示と同じ内容）を描画
             const fontSize = Math.floor(canvas.width * 0.038);
             ctx.font = `bold ${fontSize}px sans-serif`;
             ctx.fillStyle = "#ffffff";
             ctx.textBaseline = "middle";
 
-            // 左側に日付
+            // 左側に日付 (年月日のみ)
             ctx.textAlign = "left";
-            ctx.fillText(dateStr, fontSize, canvas.height - (boxHeight / 2));
+            ctx.fillText(savedDateStr, fontSize, canvas.height - (boxHeight / 2));
 
-            // 右側に認識番号
+            // 右側に認識番号 (英数4桁)
             ctx.textAlign = "right";
-            ctx.fillText(codeStr, canvas.width - fontSize, canvas.height - (boxHeight / 2));
+            ctx.fillText(savedCodeStr, canvas.width - fontSize, canvas.height - (boxHeight / 2));
 
-            // 5. 自動ダウンロード処理
+            // 4. 自動ダウンロード処理
             const dataUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
-            link.download = `tokuten_${year}${month}${day}_${code}.png`;
-            link.href = dataUrl;
-            link.click();
-        });
-    </script>
-</body>
-</html>
+            
+            // ファイル名も日付とコードにする
+            const cleanCode = 
