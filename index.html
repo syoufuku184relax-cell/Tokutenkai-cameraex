@@ -5,42 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>特典会カメラ</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 10px; }
-        video, img, canvas { width: 100%; max-width: 500px; display: block; margin: 10px auto; }
-        button { padding: 15px 30px; font-size: 18px; margin: 10px; }
+        body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; margin: 0; padding: 15px; }
+        .container { max-width: 500px; margin: 0 auto; }
+        video { width: 100%; border-radius: 12px; background: #000; display: block; margin-bottom: 15px; }
+        button {
+            width: 100%;
+            padding: 18px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #fff;
+            background: #2563eb;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button:active { background: #1d4ed8; transform: scale(0.98); }
+        canvas { display: none; }
     </style>
 </head>
 <body>
-    <h3>特典会カメラ（撮影時自動保存）</h3>
-    <video id="video" autoplay playsinline></video>
-    <button id="snap">撮影して保存</button>
-    <canvas id="canvas" style="display:none;"></canvas>
+    <div class="container">
+        <h2>特典会カメラ</h2>
+        <video id="video" autoplay playsinline></video>
+        <button id="snap">📸 撮影して自動保存</button>
+        <canvas id="canvas"></canvas>
+    </div>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const snap = document.getElementById('snap');
 
-        // カメラ起動
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            .then(stream => { video.srcObject = stream; });
+        // 外カメラを優先起動
+        navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: "environment" } }
+        }).catch(() => {
+            // 外カメラがない場合は標準カメラ
+            return navigator.mediaDevices.getUserMedia({ video: true });
+        }).then(stream => {
+            video.srcObject = stream;
+        }).catch(err => {
+            alert('カメラの起動に失敗しました: ' + err.message);
+        });
 
-        // 撮影ボタンの動作
+        // 撮影処理
         snap.addEventListener('click', () => {
+            if (!video.videoWidth) return;
+
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // 日付を合成（簡易的）
-            ctx.font = "40px Arial";
-            ctx.fillStyle = "white";
-            ctx.fillText(new Date().toLocaleString(), 20, 50);
 
-            // 自動ダウンロード処理
+            // 1. 写真を描画
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // 2. 日付データと4桁の認識番号を作成
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            
+            const dateStr = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+            
+            // 4桁のランダム認識番号（例: 4829）
+            const code = Math.floor(1000 + Math.random() * 9000);
+            const codeStr = `No. ${code}`;
+
+            // 3. 合成用背景帯を描画（文字を見やすくするため）
+            const boxHeight = canvas.height * 0.08; // 全体高の8%
+            ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+            ctx.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
+
+            // 4. テキスト（日付・認識番号）を描画
+            const fontSize = Math.floor(canvas.width * 0.038);
+            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.fillStyle = "#ffffff";
+            ctx.textBaseline = "middle";
+
+            // 左側に日付
+            ctx.textAlign = "left";
+            ctx.fillText(dateStr, fontSize, canvas.height - (boxHeight / 2));
+
+            // 右側に認識番号
+            ctx.textAlign = "right";
+            ctx.fillText(codeStr, canvas.width - fontSize, canvas.height - (boxHeight / 2));
+
+            // 5. 自動ダウンロード処理
             const dataUrl = canvas.toDataURL('image/png');
             const link = document.createElement('a');
-            link.download = 'tokuten-photo-' + Date.now() + '.png';
+            link.download = `tokuten_${year}${month}${day}_${code}.png`;
             link.href = dataUrl;
             link.click();
         });
