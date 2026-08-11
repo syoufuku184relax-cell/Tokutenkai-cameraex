@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PWA Camera Debug Test</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; background: #222; color: #fff; margin: 0; padding: 15px; }
+    video, img { width: 100%; max-width: 400px; border-radius: 12px; background: #111; display: block; margin: 10px auto; min-height: 200px; }
+    button { padding: 12px 20px; font-size: 16px; border-radius: 20px; border: none; background: #007bff; color: white; font-weight: bold; margin: 5px; }
+    button:disabled { background: #555; }
+    #log { background: #000; color: #0f0; text-align: left; padding: 10px; font-family: monospace; font-size: 12px; border-radius: 8px; margin-top: 15px; max-height: 150px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+
+  <h3>デジトレ撮影テスト（エラー診断付き）</h3>
+
+  <video id="preview" autoplay playsinline muted></video>
+
+  <div>
+    <button id="startBtn">1. カメラ起動</button>
+    <button id="snapBtn" disabled>2. 撮影 & 合成</button>
+  </div>
+
+  <img id="resultImage" alt="撮影結果エリア">
+  <canvas id="canvas" style="display:none;"></canvas>
+
+  <div id="log">--- ログ出力エリア ---<br></div>
+
+  <script>
+    const video = document.getElementById('preview');
+    const canvas = document.getElementById('canvas');
+    const resultImage = document.getElementById('resultImage');
+    const startBtn = document.getElementById('startBtn');
+    const snapBtn = document.getElementById('snapBtn');
+    const logDiv = document.getElementById('log');
+
+    function log(msg, isError = false) {
+      const color = isError ? '#ff4d4d' : '#00ff00';
+      logDiv.innerHTML += `<span style="color:${color};">[${new Date().toLocaleTimeString()}] ${msg}</span><br>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    startBtn.addEventListener('click', async () => {
+      log("カメラ起動処理を開始...");
+      
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        log("エラー: getUserMediaがサポートされていません (HTTPSまたはlocalhostでアクセスしてください)", true);
+        return;
+      }
+
+      // 試行パターン1: 背面カメラを優先指定
+      try {
+        log("背面カメラで接続試行中...");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false
+        });
+        video.srcObject = stream;
+        snapBtn.disabled = false;
+        startBtn.disabled = true;
+        log("成功: 背面カメラが起動しました！");
+      } catch (err1) {
+        log(`背面カメラ起動失敗: ${err1.name} - ${err1.message}`, true);
+        log("汎用カメラ設定で再試行中...");
+        
+        // 試行パターン2: 条件を緩めて再試行 (標準カメラ)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          video.srcObject = stream;
+          snapBtn.disabled = false;
+          startBtn.disabled = true;
+          log("成功: 汎用カメラが起動しました！");
+        } catch (err2) {
+          log(`カメラ起動に完全失敗: ${err2.name} - ${err2.message}`, true);
+        }
+      }
+    });
+
+    snapBtn.addEventListener('click', () => {
+      if (!video.videoWidth) {
+        log("エラー: 映像サイズが取得できません", true);
+        return;
+      }
+
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+
+      const bannerHeight = canvas.height * 0.12;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+
+      const fontSize = Math.floor(bannerHeight * 0.35);
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.fillStyle = "#ffffff";
+      ctx.textBaseline = "middle";
+
+      ctx.fillText(`${dateStr}`, canvas.width * 0.04, canvas.height - (bannerHeight / 2));
+      const codeText = `CODE: ${code}`;
+      const textWidth = ctx.measureText(codeText).width;
+      ctx.fillText(codeText, canvas.width - textWidth - (canvas.width * 0.04), canvas.height - (bannerHeight / 2));
+
+      resultImage.src = canvas.toDataURL('image/jpeg', 0.9);
+      log(`撮影完了! コード: ${code}`);
+    });
+  </script>
+</body>
+</html>
