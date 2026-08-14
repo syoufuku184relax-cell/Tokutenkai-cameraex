@@ -2,61 +2,45 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>特典会カメラ</title>
     <style>
         body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; margin: 0; padding: 15px; }
         .container { max-width: 500px; margin: 0 auto; }
         .counter-display { font-size: 20px; font-weight: bold; color: #fbbf24; margin: 10px 0; padding: 10px; background: #1e1e1e; border-radius: 8px; }
-        #preview-area { position: relative; width: 100%; margin-bottom: 15px; overflow: hidden; border-radius: 12px; background: #000; border: 4px solid #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); transition: border-color 0.3s; box-sizing: border-box; }
+        #preview-area { position: relative; width: 100%; margin-bottom: 15px; overflow: hidden; border-radius: 12px; background: #000; border: 4px solid #ef4444; }
         video { width: 100%; display: block; }
-        #overlay-info { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 0, 0, 0.6); padding: 8px 0; display: flex; justify-content: space-around; font-size: 14px; font-weight: bold; color: #fff; }
-        
-        .select-wrapper { margin-bottom: 15px; text-align: left; }
-        .select-header { display: flex; gap: 8px; margin-top: 5px; }
-        select, input[type="text"] { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff; }
-        .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; margin-top: 10px; text-align: left; font-size: 13px; }
-        .config-group { margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-        .btn-action { padding: 10px; margin-top: 5px; background: #7c3aed; color: white; border: none; border-radius: 6px; width: 100%; cursor: pointer; }
-        .btn-reset { background: #991b1b; }
+        #overlay-info { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 0, 0, 0.6); padding: 8px 0; display: flex; justify-content: space-around; font-size: 14px; font-weight: bold; }
+        .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; text-align: left; font-size: 13px; margin-bottom: 15px; }
         button { width: 100%; padding: 15px; font-size: 18px; font-weight: bold; color: #fff; background: #2563eb; border: none; border-radius: 12px; cursor: pointer; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; padding: 15px; }
-        .modal-content { background: #1e1e1e; padding: 15px; border-radius: 12px; max-width: 480px; width: 100%; text-align: center; }
-        .modal-content img { width: 100%; border-radius: 8px; margin-bottom: 15px; }
-        .btn-print-save { background: #059669; padding: 20px; }
+        .btn-action { padding: 10px; background: #7c3aed; margin-top: 5px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: #1e1e1e; padding: 15px; border-radius: 12px; width: 90%; }
+        #debug-status { color: #f87171; background: #450a0a; padding: 10px; margin-bottom: 10px; font-size: 12px; border-radius: 5px; display: none; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>特典会カメラ</h2>
+        <div id="debug-status"></div>
         <div class="counter-display">保存枚数: <span id="photo-count">0</span> 枚</div>
         
-        <div class="select-wrapper">
-            <select id="idol-select"></select>
-            <button id="toggle-settings" class="btn-action" style="background:#4b5563">⚙ 設定・管理</button>
-            
-            <div id="settings-panel" class="settings-panel">
-                <div class="config-group">
-                    <strong>端末ID設定</strong><br>
-                    <input type="text" id="cfg-terminal-id" placeholder="ID (例: A, AA, B-01)">
-                </div>
-                <div class="config-group">
-                    <strong>クラウド設定 (Cloudinary)</strong><br>
-                    <input type="text" id="cfg-cloud-name" placeholder="Cloud Name"><br>
-                    <input type="text" id="cfg-preset" placeholder="Upload Preset"><br>
-                    <input type="text" id="cfg-folder" placeholder="親フォルダ名">
-                </div>
-                <button id="save-config" class="btn-action">設定を保存</button>
-                <button id="bulk-upload-btn" class="btn-action" style="background:#059669">📂 写真を一括送信</button>
-                <hr>
-                <button id="reset-counter-btn" class="btn-action btn-reset">枚数カウンターをリセット</button>
-            </div>
+        <button id="toggle-settings" style="background:#4b5563; margin-bottom:10px;">⚙ 設定・管理</button>
+        <div id="settings-panel" class="settings-panel">
+            <strong>端末ID:</strong> <input type="text" id="cfg-terminal-id" placeholder="A" style="width:50px"><br>
+            <strong>Cloudinary設定:</strong><br>
+            <input type="text" id="cfg-cloud-name" placeholder="Cloud Name"><br>
+            <input type="text" id="cfg-preset" placeholder="Upload Preset"><br>
+            <input type="text" id="cfg-folder" placeholder="フォルダ名"><br>
+            <button id="save-config" class="btn-action">設定を保存</button>
+            <button id="bulk-upload-btn" class="btn-action" style="background:#059669">📂 写真を一括送信</button>
         </div>
 
         <div id="preview-area">
             <video id="video" autoplay playsinline></video>
             <div id="overlay-info">
-                <span id="display-name">----</span>
-                <span id="display-date">----/--/--</span>
+                <span id="display-name">---</span>
+                <span id="display-date">---</span>
                 <span id="display-code">No. ----</span>
             </div>
         </div>
@@ -64,18 +48,10 @@
         <canvas id="canvas" style="display:none"></canvas>
     </div>
 
-    <div id="modal-preview" class="modal">
-        <div class="modal-content">
-            <img id="modal-img" src="">
-            <div class="modal-actions">
-                <button id="btn-modal-print" class="btn-action btn-print-save">🖨 印刷 ＆ 保存</button>
-                <button id="btn-modal-close" class="btn-action" style="background:#4b5563; margin-top:10px;">キャンセル</button>
-            </div>
-        </div>
-    </div>
+    <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
-        // 設定ロード
+        // 設定読み込み
         const config = JSON.parse(localStorage.getItem('tokuten_config')) || { cloudName: '', preset: '', folder: '', terminalId: 'A' };
         document.getElementById('cfg-cloud-name').value = config.cloudName;
         document.getElementById('cfg-preset').value = config.preset;
@@ -92,35 +68,66 @@
             };
             localStorage.setItem('tokuten_config', JSON.stringify(newCfg));
             alert('設定を保存しました');
-            updateDisplayInfo(); // ID変更を即時反映
+            location.reload();
         };
 
-        // 各種要素取得・処理ロジック (省略部分は前回のまま維持)
-        const idolSelect = document.getElementById('idol-select');
-        const displayCode = document.getElementById('display-code');
-        const displayDate = document.getElementById('display-date');
-        const displayName = document.getElementById('display-name');
-        
-        function updateDisplayInfo() {
-            const now = new Date();
-            const config = JSON.parse(localStorage.getItem('tokuten_config')) || { terminalId: 'A' };
-            const savedDateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-            const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-            let code = "";
-            for(let i=0; i<4; i++) code += chars.charAt(Math.floor(Math.random()*chars.length));
-            
-            const fullCode = `No. ${code}-${config.terminalId}`; // ここでIDを連結
-            
-            displayName.textContent = idolSelect.value || "----";
-            displayDate.textContent = savedDateStr;
-            displayCode.textContent = fullCode;
-            
-            return { savedDateStr, fullCode, code };
-        }
+        // 設定表示切り替え
+        document.getElementById('toggle-settings').onclick = () => {
+            const p = document.getElementById('settings-panel');
+            p.style.display = (p.style.display === 'block') ? 'none' : 'block';
+        };
 
-        // カメラ起動・撮影・印刷の処理は前回コードのロジックを流用してください
-        // snapイベント内で、ファイル名に config.terminalId を含めるように修正してください
-        // 例: `tokuten_${idolName}_${date}_${code}-${config.terminalId}.png`
+        // --- カメラ起動処理 (修正版) ---
+        async function startCamera() {
+            const statusDiv = document.getElementById('debug-status');
+            try {
+                // 背面カメラを優先して試す
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                document.getElementById('video').srcObject = stream;
+            } catch (err) {
+                console.error(err);
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = "カメラ起動エラー: " + err.name + " (" + err.message + ")";
+                
+                // 失敗した場合、通常のカメラで再試行
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    document.getElementById('video').srcObject = stream;
+                } catch (err2) {
+                    statusDiv.textContent += " / 通常カメラも失敗しました。ブラウザの設定でカメラ許可を確認してください。";
+                }
+            }
+        }
+        startCamera();
+
+        // 撮影処理
+        document.getElementById('snap').onclick = () => {
+            const cfg = JSON.parse(localStorage.getItem('tokuten_config')) || { terminalId: 'A' };
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            // 撮影時コード生成
+            const code = Math.floor(1000 + Math.random() * 9000);
+            const fullCode = `No. ${code}-${cfg.terminalId}`;
+            document.getElementById('display-code').textContent = fullCode;
+            
+            // 保存処理
+            const data = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = `photo_${fullCode}.png`;
+            link.href = data;
+            link.click();
+            
+            let count = parseInt(localStorage.getItem('photo_count') || 0) + 1;
+            localStorage.setItem('photo_count', count);
+            document.getElementById('photo-count').textContent = count;
+        };
     </script>
 </body>
 </html>
