@@ -7,7 +7,8 @@
     <style>
         body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; }
-        .header-stats { display: flex; justify-content: space-between; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; }
+        .header-stats { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; }
+        #display-name { padding: 4px 10px; border-radius: 4px; font-weight: bold; }
         
         #preview-container { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; background: #000; border: 5px solid #444; }
         video { width: 100%; height: 100%; object-fit: cover; }
@@ -16,7 +17,7 @@
         input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #333; background: #000; color: #fff; }
         
         button { width: 100%; padding: 12px; margin-top: 5px; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
-        .btn-toggle { background: #6b7280; color: #fff; } /* 薄いグレー */
+        .btn-toggle { background: #6b7280; color: #fff; } 
         .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; }
         
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
@@ -28,7 +29,7 @@
     <div class="container">
         <div class="header-stats">
             <div>撮影枚数: <span id="photo-count">0</span></div>
-            <div><span id="display-name">---</span></div>
+            <div id="display-name">---</div>
         </div>
 
         <button class="btn-toggle" onclick="document.getElementById('settings-panel').style.display = (document.getElementById('settings-panel').style.display === 'block' ? 'none' : 'block')">⚙ 設定・管理</button>
@@ -41,13 +42,15 @@
                 <option value="#ff0000">赤</option><option value="#0000ff">青</option>
                 <option value="#800080">紫</option><option value="#87ceeb">水色</option>
                 <option value="#008000">緑</option><option value="#ffff00">黄</option>
-                <option value="#ffc0cb">ピンク</option>
+                <option value="#ffc0cb">ピンク</option><option value="#ffffff">白</option>
+                <option value="#50c878">エメラルドグリーン</option>
             </select>
+            <input type="text" id="in-custom-color" placeholder="またはHEXコードを入力 (#FF5733)">
             <button onclick="addIdol()" style="background:#059669;">追加</button>
             <button onclick="deleteIdol()" style="background:#991b1b;">削除</button>
             <hr style="margin:15px 0;">
             <strong>2. 端末/クラウド設定</strong>
-            <input type="text" id="cfg-term" placeholder="端末ID(例: A)">
+            <input type="text" id="cfg-term" placeholder="端末ID">
             <input type="text" id="cfg-cloud" placeholder="Cloud Name">
             <input type="text" id="cfg-preset" placeholder="Preset">
             <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
@@ -75,13 +78,30 @@
     <script>
         let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 };
 
+        // 背景色から文字色(白or黒)を決定
+        function getContrastYIQ(hexcolor){
+            const r = parseInt(hexcolor.substr(1,2),16);
+            const g = parseInt(hexcolor.substr(3,2),16);
+            const b = parseInt(hexcolor.substr(5,2),16);
+            const yiq = ((r*299)+(g*587)+(b*114))/1000;
+            return (yiq >= 128) ? 'black' : 'white';
+        }
+
         function updateUI() {
             const select = document.getElementById('idol-select');
             const name = select.value;
             const idol = data.idols.find(i => i.name === name);
+            const display = document.getElementById('display-name');
+            
             if(idol) {
-                document.getElementById('display-name').textContent = idol.name;
+                display.textContent = idol.name;
+                display.style.backgroundColor = idol.color;
+                display.style.color = getContrastYIQ(idol.color);
                 document.getElementById('preview-container').style.borderColor = idol.color;
+            } else {
+                display.textContent = '---';
+                display.style.backgroundColor = 'transparent';
+                display.style.color = 'white';
             }
             document.getElementById('photo-count').textContent = data.count;
         }
@@ -94,11 +114,19 @@
 
         function addIdol() {
             const nameInput = document.getElementById('in-name');
+            const customColor = document.getElementById('in-custom-color').value;
+            const selectColor = document.getElementById('in-color').value;
+            
             const name = nameInput.value;
             if(!name) return;
-            data.idols.push({ name: name, color: document.getElementById('in-color').value });
+            
+            // 入力欄に値があればそちらを優先、なければプルダウン
+            const color = (customColor.startsWith('#') && customColor.length === 7) ? customColor : selectColor;
+            
+            data.idols.push({ name: name, color: color });
             localStorage.setItem('app_data', JSON.stringify(data));
-            nameInput.value = ''; // 入力欄リセット
+            nameInput.value = ''; // リセット
+            document.getElementById('in-custom-color').value = '';
             renderSelect();
         }
 
@@ -123,7 +151,6 @@
             }
         }
 
-        // --- 一括送信 ---
         document.getElementById('file-picker').onchange = async (e) => {
             const files = e.target.files;
             if(!data.config.cloud) return alert('Cloud Nameが未設定です');
@@ -139,7 +166,6 @@
             updateUI();
         };
 
-        // --- 撮影・保存 ---
         async function start() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
