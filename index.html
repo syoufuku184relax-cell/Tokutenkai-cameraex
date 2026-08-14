@@ -7,25 +7,61 @@
     <style>
         body { font-family: sans-serif; text-align: center; background: #121212; color: #fff; margin: 0; padding: 15px; }
         .container { max-width: 500px; margin: 0 auto; }
-        #preview-area { position: relative; width: 100%; margin-bottom: 15px; overflow: hidden; border-radius: 12px; background: #000; }
+        #preview-area { position: relative; width: 100%; margin-bottom: 10px; overflow: hidden; border-radius: 12px; background: #000; }
         video { width: 100%; display: block; }
-        #overlay-info { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 0, 0, 0.6); padding: 10px 0; display: flex; justify-content: space-around; font-size: 14px; font-weight: bold; color: #fff; }
+        #overlay-info { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 0, 0, 0.6); padding: 8px 0; display: flex; justify-content: space-around; font-size: 14px; font-weight: bold; color: #fff; }
+        
+        /* アイドル選択用スタイル */
+        .select-wrapper { margin-bottom: 15px; text-align: left; }
+        .select-header { display: flex; gap: 8px; margin-top: 5px; }
+        select { flex: 1; padding: 12px; font-size: 16px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; }
+        
+        /* 管理パネル用スタイル */
+        .btn-settings { width: auto; padding: 0 15px; font-size: 14px; background: #374151; box-shadow: none; }
+        .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; margin-top: 10px; border: 1px solid #333; text-align: left; }
+        .add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+        .add-row input { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #444; background: #121212; color: #fff; font-size: 14px; }
+        .btn-add { width: auto; padding: 10px 15px; font-size: 14px; background: #16a34a; box-shadow: none; }
+        .idol-list { list-style: none; padding: 0; margin: 0; max-height: 180px; overflow-y: auto; }
+        .idol-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #333; font-size: 14px; }
+        .btn-delete { width: auto; padding: 4px 10px; font-size: 12px; background: #dc2626; box-shadow: none; border-radius: 6px; }
+
         button { width: 100%; padding: 18px; font-size: 20px; font-weight: bold; color: #fff; background: #2563eb; border: none; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        button:active { background: #1d4ed8; transform: scale(0.98); }
+        button:active { opacity: 0.8; transform: scale(0.98); }
         canvas { display: none; }
     </style>
 </head>
 <body>
     <div class="container">
         <h2>特典会カメラ</h2>
+        
+        <div class="select-wrapper">
+            <label for="idol-select">担当アイドルを選択:</label>
+            <div class="select-header">
+                <select id="idol-select"></select>
+                <button id="toggle-settings" type="button" class="btn-settings">⚙ 管理</button>
+            </div>
+
+            <!-- メンバー管理パネル -->
+            <div id="settings-panel" class="settings-panel">
+                <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">メンバーの追加・削除</div>
+                <div class="add-row">
+                    <input type="text" id="new-idol-input" placeholder="名前を入力">
+                    <button type="button" id="add-idol-btn" class="btn-add">追加</button>
+                </div>
+                <ul id="idol-list-ui" class="idol-list"></ul>
+            </div>
+        </div>
+
         <div id="preview-area">
             <video id="video" autoplay playsinline></video>
             <div id="overlay-info">
+                <span id="display-name">----</span>
                 <span id="display-date">----/--/--</span>
                 <span id="display-code">No. ----</span>
             </div>
         </div>
-        <button id="snap">📸 撮影して自動保存</button>
+        <button id="snap">📸 撮影して保存</button>
         <canvas id="canvas"></canvas>
     </div>
 
@@ -33,22 +69,89 @@
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const snap = document.getElementById('snap');
+        const idolSelect = document.getElementById('idol-select');
+        const displayName = document.getElementById('display-name');
         const displayDate = document.getElementById('display-date');
         const displayCode = document.getElementById('display-code');
 
+        const toggleSettings = document.getElementById('toggle-settings');
+        const settingsPanel = document.getElementById('settings-panel');
+        const newIdolInput = document.getElementById('new-idol-input');
+        const addIdolBtn = document.getElementById('add-idol-btn');
+        const idolListUi = document.getElementById('idol-list-ui');
+
+        // デフォルトリスト（保存データがない場合に使用）
+        const defaultIdols = ["アイドル A", "アイドル B", "アイドル C"];
+        let idols = JSON.parse(localStorage.getItem('tokuten_idols')) || defaultIdols;
+
         let savedDateStr = "";
         let currentCode = "";
-        
-        // 本日使用済みのコードを保持するリスト（重複防止）
         const usedCodes = new Set();
 
-        // 紛らわしい文字(0, O, 1, I)を除いた4桁コード生成関数
+        // リストの保存と画面更新
+        function saveAndRenderIdols() {
+            localStorage.setItem('tokuten_idols', JSON.stringify(idols));
+
+            // セレクトボックスの再構築
+            const currentSelected = idolSelect.value;
+            idolSelect.innerHTML = "";
+            idols.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                idolSelect.appendChild(opt);
+            });
+
+            if (idols.includes(currentSelected)) {
+                idolSelect.value = currentSelected;
+            }
+
+            // 管理パネルのリスト描画
+            idolListUi.innerHTML = "";
+            idols.forEach((name, index) => {
+                const li = document.createElement('li');
+                li.className = "idol-item";
+                li.innerHTML = `
+                    <span>${name}</span>
+                    <button type="button" class="btn-delete" onclick="removeIdol(${index})">削除</button>
+                `;
+                idolListUi.appendChild(li);
+            });
+
+            updateDisplayInfo();
+        }
+
+        // アイドル追加
+        addIdolBtn.addEventListener('click', () => {
+            const name = newIdolInput.value.trim();
+            if (name && !idols.includes(name)) {
+                idols.push(name);
+                newIdolInput.value = "";
+                saveAndRenderIdols();
+                idolSelect.value = name; // 追加した名前を選択状態に
+            }
+        });
+
+        // アイドル削除（グローバル関数として定義）
+        window.removeIdol = function(index) {
+            if (idols.length <= 1) {
+                alert('少なくとも1人のメンバーが必要です。');
+                return;
+            }
+            idols.splice(index, 1);
+            saveAndRenderIdols();
+        };
+
+        // 管理パネルの開閉
+        toggleSettings.addEventListener('click', () => {
+            const isOpen = settingsPanel.style.display === "block";
+            settingsPanel.style.display = isOpen ? "none" : "block";
+        });
+
         function generateUniqueCode() {
             const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
             let code = "";
             let attempts = 0;
-            
-            // 未使用のコードが生成されるまでループ
             do {
                 code = "";
                 for (let i = 0; i < 4; i++) {
@@ -56,23 +159,24 @@
                 }
                 attempts++;
             } while (usedCodes.has(code) && attempts < 1000);
-
             usedCodes.add(code);
             return code;
         }
 
-        // 画面の「日付」と「認識番号」を最新化する処理
         function updateDisplayInfo() {
             const now = new Date();
             savedDateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
             currentCode = generateUniqueCode();
-
+            
+            displayName.textContent = idolSelect.value || "----";
             displayDate.textContent = savedDateStr;
             displayCode.textContent = `No. ${currentCode}`;
         }
 
-        // 初期化（1枚目のコードを用意）
-        updateDisplayInfo();
+        idolSelect.addEventListener('change', updateDisplayInfo);
+
+        // 初期描画
+        saveAndRenderIdols();
 
         // カメラ起動
         navigator.mediaDevices.getUserMedia({
@@ -87,42 +191,42 @@
             });
         });
 
-        // 撮影・印字・保存処理
+        // 撮影処理
         snap.addEventListener('click', () => {
             if (!video.videoWidth) return;
 
-            // 1. キャンバス準備
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
 
-            // 2. 写真を描画
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // 3. 下部の黒帯を描画
             const boxHeight = canvas.height * 0.08;
             ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
             ctx.fillRect(0, canvas.height - boxHeight, canvas.width, boxHeight);
 
-            // 4. 文字印字（現在表示中の日付とコード）
-            const fontSize = Math.floor(canvas.width * 0.038);
+            const fontSize = Math.floor(canvas.width * 0.035);
             ctx.font = `bold ${fontSize}px sans-serif`;
             ctx.fillStyle = "#ffffff";
             ctx.textBaseline = "middle";
 
+            const currentName = idolSelect.value || "";
+
+            // 印字位置
             ctx.textAlign = "left";
-            ctx.fillText(savedDateStr, fontSize, canvas.height - (boxHeight / 2));
+            ctx.fillText(currentName, fontSize * 1.5, canvas.height - (boxHeight / 2));
+            
+            ctx.textAlign = "center";
+            ctx.fillText(savedDateStr, canvas.width / 2, canvas.height - (boxHeight / 2));
 
             ctx.textAlign = "right";
-            ctx.fillText(`No. ${currentCode}`, canvas.width - fontSize, canvas.height - (boxHeight / 2));
+            ctx.fillText(`No. ${currentCode}`, canvas.width - (fontSize * 1.5), canvas.height - (boxHeight / 2));
 
-            // 5. 保存実行
             const link = document.createElement('a');
-            link.download = `tokuten_${savedDateStr.replace(/\//g, '')}_${currentCode}.png`;
+            link.download = `tokuten_${currentName}_${savedDateStr.replace(/\//g, '')}_${currentCode}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
 
-            // 6. 【重要】保存完了後、次の撮影のために新しいコードを即座に発行！
             updateDisplayInfo();
         });
     </script>
