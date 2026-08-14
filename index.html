@@ -3,19 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>特典会カメラ・マスター</title>
+    <title>特典会カメラ</title>
     <style>
         body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; }
         .header-stats { display: flex; justify-content: space-between; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; }
         
-        #preview-container { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; background: #000; border: 5px solid #444; transition: border-color 0.3s; }
+        #preview-container { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; background: #000; border: 5px solid #444; }
         video { width: 100%; height: 100%; object-fit: cover; }
         
-        .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 14px; }
+        .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 14px; text-align: left; }
         input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #333; background: #000; color: #fff; }
         
         button { width: 100%; padding: 12px; margin-top: 5px; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
+        .btn-toggle { background: #f59e0b; color: #000; } /* 見やすい色に変更 */
         .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; }
         
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
@@ -30,24 +31,24 @@
             <div><span id="display-name">---</span></div>
         </div>
 
-        <button onclick="document.getElementById('settings-panel').style.display = (document.getElementById('settings-panel').style.display === 'block' ? 'none' : 'block')">⚙ 設定・管理</button>
+        <button class="btn-toggle" onclick="document.getElementById('settings-panel').style.display = (document.getElementById('settings-panel').style.display === 'block' ? 'none' : 'block')">⚙ 設定・管理</button>
         
         <div id="settings-panel" class="settings-panel">
-            <strong>1. アイドル/メンカラ管理</strong>
-            <input type="text" id="in-name" placeholder="名前">
+            <strong>1. アイドル選択・管理</strong>
+            <select id="idol-select" onchange="updateUI()"></select>
+            <input type="text" id="in-name" placeholder="新しい名前">
             <input type="color" id="in-color" value="#ff0000">
             <button onclick="addIdol()" style="background:#059669;">追加</button>
-            <select id="idol-select" onchange="updateUI()"></select>
-            
+            <button onclick="deleteIdol()" style="background:#991b1b; margin-top:5px;">選択中のアイドルを削除</button>
+            <hr style="margin:15px 0;">
             <strong>2. 端末/クラウド設定</strong>
             <input type="text" id="cfg-term" placeholder="端末ID(例: A)">
             <input type="text" id="cfg-cloud" placeholder="Cloud Name">
             <input type="text" id="cfg-preset" placeholder="Preset">
             <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
-            <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2;">📂 一括送信</button>
         </div>
 
-        <div id="preview-container" id="border-preview">
+        <div id="preview-container">
             <video id="video" autoplay playsinline></video>
         </div>
         <button class="btn-snap" onclick="snap()">📸 撮影</button>
@@ -57,21 +58,16 @@
     <div id="modal" class="modal">
         <div class="modal-content">
             <img id="modal-img">
-            <button onclick="window.print()" style="background:#2563eb; margin-top:10px;">🖨 印刷 (保存)</button>
-            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b;">閉じる</button>
+            <button onclick="confirmPrint()" style="background:#2563eb; margin-top:10px;">🖨 印刷 (保存してカウント)</button>
+            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b;">閉じる (カウントしない)</button>
         </div>
     </div>
 
     <canvas id="canvas" style="display:none"></canvas>
-    <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
-        // データ管理
-        let data = JSON.parse(localStorage.getItem('app_data')) || { 
-            idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 
-        };
+        let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 };
 
-        // UI初期化
         function updateUI() {
             const select = document.getElementById('idol-select');
             const name = select.value;
@@ -84,17 +80,22 @@
         }
 
         function saveSettings() {
-            data.config = {
-                term: document.getElementById('cfg-term').value,
-                cloud: document.getElementById('cfg-cloud').value,
-                preset: document.getElementById('cfg-preset').value
-            };
+            data.config = { term: document.getElementById('cfg-term').value, cloud: document.getElementById('cfg-cloud').value, preset: document.getElementById('cfg-preset').value };
             localStorage.setItem('app_data', JSON.stringify(data));
             alert('保存しました');
         }
 
         function addIdol() {
-            data.idols.push({ name: document.getElementById('in-name').value, color: document.getElementById('in-color').value });
+            const name = document.getElementById('in-name').value;
+            if(!name) return;
+            data.idols.push({ name: name, color: document.getElementById('in-color').value });
+            localStorage.setItem('app_data', JSON.stringify(data));
+            renderSelect();
+        }
+
+        function deleteIdol() {
+            const name = document.getElementById('idol-select').value;
+            data.idols = data.idols.filter(i => i.name !== name);
             localStorage.setItem('app_data', JSON.stringify(data));
             renderSelect();
         }
@@ -105,7 +106,6 @@
             updateUI();
         }
 
-        // カメラ
         async function start() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -113,36 +113,37 @@
             } catch(e) { alert("カメラ許可が必要です"); }
         }
 
-        // 撮影処理
         function snap() {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 600; canvas.height = 900;
-            ctx.drawImage(video, 0, 0, 600, 900); // 簡略化して描画
+            ctx.drawImage(video, 0, 0, 600, 900);
             
-            // テキスト焼き付け
+            // テキスト・日付焼き付け
+            const now = new Date();
+            const dateStr = now.toLocaleDateString();
+            const code = Math.floor(1000 + Math.random() * 9000);
+            
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
             ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
-            const code = Math.floor(1000 + Math.random() * 9000);
-            ctx.fillText(`${document.getElementById('idol-select').value} No.${code}-${data.config.term}`, 20, 880);
+            ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${code}-${data.config.term}`, 20, 880);
             
-            // 保存・更新
-            data.count++;
-            localStorage.setItem('app_data', JSON.stringify(data));
             document.getElementById('modal-img').src = canvas.toDataURL();
             document.getElementById('modal').style.display = 'flex';
+        }
+
+        function confirmPrint() {
+            window.print();
+            data.count++; // ここでカウントアップ
+            localStorage.setItem('app_data', JSON.stringify(data));
+            document.getElementById('modal').style.display = 'none';
             updateUI();
         }
 
-        // 一括アップロード
-        document.getElementById('file-picker').onchange = (e) => {
-            alert('アップロード機能を使用するにはCloudinary設定を確認してください');
-        };
-
-        // 起動
         renderSelect();
         start();
+        updateUI();
     </script>
 </body>
 </html>
