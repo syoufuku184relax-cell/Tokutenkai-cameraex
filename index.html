@@ -78,7 +78,28 @@
     <script>
         let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 };
 
-        // 背景色から文字色(白or黒)を決定
+        // 一意なコードを生成（同日内重複なし）
+        function generateUniqueCode() {
+            const today = new Date().toISOString().split('T')[0];
+            const storageKey = 'used_codes_' + today;
+            let usedCodes = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let code = '';
+            
+            // 重複しないコードが見つかるまでループ
+            do {
+                code = '';
+                for (let i = 0; i < 4; i++) {
+                    code += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+            } while (usedCodes.includes(code));
+
+            usedCodes.push(code);
+            localStorage.setItem(storageKey, JSON.stringify(usedCodes));
+            return code;
+        }
+
         function getContrastYIQ(hexcolor){
             const r = parseInt(hexcolor.substr(1,2),16);
             const g = parseInt(hexcolor.substr(3,2),16);
@@ -116,16 +137,12 @@
             const nameInput = document.getElementById('in-name');
             const customColor = document.getElementById('in-custom-color').value;
             const selectColor = document.getElementById('in-color').value;
-            
             const name = nameInput.value;
             if(!name) return;
-            
-            // 入力欄に値があればそちらを優先、なければプルダウン
             const color = (customColor.startsWith('#') && customColor.length === 7) ? customColor : selectColor;
-            
             data.idols.push({ name: name, color: color });
             localStorage.setItem('app_data', JSON.stringify(data));
-            nameInput.value = ''; // リセット
+            nameInput.value = '';
             document.getElementById('in-custom-color').value = '';
             renderSelect();
         }
@@ -182,7 +199,8 @@
             
             const now = new Date();
             const dateStr = now.toLocaleDateString();
-            const code = Math.floor(1000 + Math.random() * 9000);
+            const code = generateUniqueCode(); // 新しい生成ロジック
+            
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
             ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
             ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${code}-${data.config.term}`, 20, 880);
