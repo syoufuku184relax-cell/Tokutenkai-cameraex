@@ -16,7 +16,7 @@
         input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #333; background: #000; color: #fff; }
         
         button { width: 100%; padding: 12px; margin-top: 5px; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
-        .btn-toggle { background: #f59e0b; color: #000; } /* 見やすい色に変更 */
+        .btn-toggle { background: #6b7280; color: #fff; } /* 薄いグレー */
         .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; }
         
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
@@ -37,15 +37,22 @@
             <strong>1. アイドル選択・管理</strong>
             <select id="idol-select" onchange="updateUI()"></select>
             <input type="text" id="in-name" placeholder="新しい名前">
-            <input type="color" id="in-color" value="#ff0000">
+            <select id="in-color">
+                <option value="#ff0000">赤</option><option value="#0000ff">青</option>
+                <option value="#800080">紫</option><option value="#87ceeb">水色</option>
+                <option value="#008000">緑</option><option value="#ffff00">黄</option>
+                <option value="#ffc0cb">ピンク</option>
+            </select>
             <button onclick="addIdol()" style="background:#059669;">追加</button>
-            <button onclick="deleteIdol()" style="background:#991b1b; margin-top:5px;">選択中のアイドルを削除</button>
+            <button onclick="deleteIdol()" style="background:#991b1b;">削除</button>
             <hr style="margin:15px 0;">
             <strong>2. 端末/クラウド設定</strong>
             <input type="text" id="cfg-term" placeholder="端末ID(例: A)">
             <input type="text" id="cfg-cloud" placeholder="Cloud Name">
             <input type="text" id="cfg-preset" placeholder="Preset">
             <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
+            <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2;">📂 写真を一括送信</button>
+            <button onclick="resetCount()" style="background:#7f1d1d; margin-top:15px;">🔄 枚数カウンターをリセット</button>
         </div>
 
         <div id="preview-container">
@@ -54,16 +61,16 @@
         <button class="btn-snap" onclick="snap()">📸 撮影</button>
     </div>
 
-    <!-- モーダル -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <img id="modal-img">
             <button onclick="confirmPrint()" style="background:#2563eb; margin-top:10px;">🖨 印刷 (保存してカウント)</button>
-            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b;">閉じる (カウントしない)</button>
+            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b;">閉じる</button>
         </div>
     </div>
 
     <canvas id="canvas" style="display:none"></canvas>
+    <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
         let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 };
@@ -86,10 +93,12 @@
         }
 
         function addIdol() {
-            const name = document.getElementById('in-name').value;
+            const nameInput = document.getElementById('in-name');
+            const name = nameInput.value;
             if(!name) return;
             data.idols.push({ name: name, color: document.getElementById('in-color').value });
             localStorage.setItem('app_data', JSON.stringify(data));
+            nameInput.value = ''; // 入力欄リセット
             renderSelect();
         }
 
@@ -106,6 +115,31 @@
             updateUI();
         }
 
+        function resetCount() {
+            if(confirm('撮影枚数を0に戻しますか？')) {
+                data.count = 0;
+                localStorage.setItem('app_data', JSON.stringify(data));
+                updateUI();
+            }
+        }
+
+        // --- 一括送信 ---
+        document.getElementById('file-picker').onchange = async (e) => {
+            const files = e.target.files;
+            if(!data.config.cloud) return alert('Cloud Nameが未設定です');
+            for(let file of files) {
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('upload_preset', data.config.preset);
+                await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud}/image/upload`, { method:'POST', body:fd });
+            }
+            alert('送信完了しました！枚数をリセットします。');
+            data.count = 0;
+            localStorage.setItem('app_data', JSON.stringify(data));
+            updateUI();
+        };
+
+        // --- 撮影・保存 ---
         async function start() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
@@ -120,22 +154,19 @@
             canvas.width = 600; canvas.height = 900;
             ctx.drawImage(video, 0, 0, 600, 900);
             
-            // テキスト・日付焼き付け
             const now = new Date();
             const dateStr = now.toLocaleDateString();
             const code = Math.floor(1000 + Math.random() * 9000);
-            
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
             ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
             ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${code}-${data.config.term}`, 20, 880);
-            
             document.getElementById('modal-img').src = canvas.toDataURL();
             document.getElementById('modal').style.display = 'flex';
         }
 
         function confirmPrint() {
             window.print();
-            data.count++; // ここでカウントアップ
+            data.count++;
             localStorage.setItem('app_data', JSON.stringify(data));
             document.getElementById('modal').style.display = 'none';
             updateUI();
