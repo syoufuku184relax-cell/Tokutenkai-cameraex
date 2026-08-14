@@ -3,152 +3,146 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>特典会カメラ (iNSPiC対応)</title>
+    <title>特典会カメラ・マスター</title>
     <style>
         body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; }
-        #preview-area { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; background: #000; border: 4px solid #ef4444; }
+        .header-stats { display: flex; justify-content: space-between; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; }
+        
+        #preview-container { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; background: #000; border: 5px solid #444; transition: border-color 0.3s; }
         video { width: 100%; height: 100%; object-fit: cover; }
-        #overlay-info { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0, 0, 0, 0.7); padding: 5px; font-size: 12px; display: flex; justify-content: space-around; }
-        .settings-panel { display: none; background: #1e1e1e; padding: 10px; border-radius: 8px; margin-top: 10px; text-align: left; }
-        input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; margin-top: 5px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+        
+        .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 14px; }
+        input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #333; background: #000; color: #fff; }
+        
+        button { width: 100%; padding: 12px; margin-top: 5px; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
+        .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { width: 90%; max-width: 400px; text-align: center; }
+        .modal-content img { width: 100%; border: 5px solid #fff; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div id="debug-status" style="color:red; font-size:12px;"></div>
-        
-        <select id="idol-select"></select>
-        <button id="toggle-settings" style="background:#4b5563;">⚙ 設定・管理</button>
+        <div class="header-stats">
+            <div>撮影枚数: <span id="photo-count">0</span></div>
+            <div><span id="display-name">---</span></div>
+        </div>
+
+        <button onclick="document.getElementById('settings-panel').style.display = (document.getElementById('settings-panel').style.display === 'block' ? 'none' : 'block')">⚙ 設定・管理</button>
         
         <div id="settings-panel" class="settings-panel">
-            <strong>アイドル管理</strong>
-            <input type="text" id="new-idol" placeholder="アイドル名を入力">
+            <strong>1. アイドル/メンカラ管理</strong>
+            <input type="text" id="in-name" placeholder="名前">
+            <input type="color" id="in-color" value="#ff0000">
             <button onclick="addIdol()" style="background:#059669;">追加</button>
-            <button onclick="deleteIdol()" style="background:#991b1b;">選択中のアイドルを削除</button>
-            <hr>
-            <strong>設定</strong>
-            <input type="text" id="cfg-terminal-id" placeholder="端末ID (A, B...)">
-            <button id="save-config">設定を保存</button>
+            <select id="idol-select" onchange="updateUI()"></select>
+            
+            <strong>2. 端末/クラウド設定</strong>
+            <input type="text" id="cfg-term" placeholder="端末ID(例: A)">
+            <input type="text" id="cfg-cloud" placeholder="Cloud Name">
+            <input type="text" id="cfg-preset" placeholder="Preset">
+            <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
+            <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2;">📂 一括送信</button>
         </div>
 
-        <div id="preview-area">
+        <div id="preview-container" id="border-preview">
             <video id="video" autoplay playsinline></video>
-            <div id="overlay-info">
-                <span id="display-name">---</span>
-                <span id="display-date">---</span>
-                <span id="display-code">No. ----</span>
-            </div>
         </div>
-        <button id="snap" style="padding:20px; font-size:20px; background:#ef4444;">📸 撮影</button>
-        <canvas id="canvas" style="display:none"></canvas>
+        <button class="btn-snap" onclick="snap()">📸 撮影</button>
     </div>
 
+    <!-- モーダル -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <img id="modal-img">
+            <button onclick="window.print()" style="background:#2563eb; margin-top:10px;">🖨 印刷 (保存)</button>
+            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b;">閉じる</button>
+        </div>
+    </div>
+
+    <canvas id="canvas" style="display:none"></canvas>
+    <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
+
     <script>
-        // --- 初期化 ---
-        let idols = JSON.parse(localStorage.getItem('idol_list')) || [];
-        const cfg = JSON.parse(localStorage.getItem('tokuten_config')) || { terminalId: 'A' };
-        
-        // アイドル一覧更新
-        function renderIdolSelect() {
+        // データ管理
+        let data = JSON.parse(localStorage.getItem('app_data')) || { 
+            idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 
+        };
+
+        // UI初期化
+        function updateUI() {
             const select = document.getElementById('idol-select');
-            select.innerHTML = '';
-            idols.forEach(name => {
-                const opt = document.createElement('option');
-                opt.value = name; opt.textContent = name;
-                select.appendChild(opt);
-            });
-            updateDisplay();
+            const name = select.value;
+            const idol = data.idols.find(i => i.name === name);
+            if(idol) {
+                document.getElementById('display-name').textContent = idol.name;
+                document.getElementById('preview-container').style.borderColor = idol.color;
+            }
+            document.getElementById('photo-count').textContent = data.count;
         }
 
-        // --- アイドル管理 ---
+        function saveSettings() {
+            data.config = {
+                term: document.getElementById('cfg-term').value,
+                cloud: document.getElementById('cfg-cloud').value,
+                preset: document.getElementById('cfg-preset').value
+            };
+            localStorage.setItem('app_data', JSON.stringify(data));
+            alert('保存しました');
+        }
+
         function addIdol() {
-            const name = document.getElementById('new-idol').value;
-            if(name) { idols.push(name); localStorage.setItem('idol_list', JSON.stringify(idols)); renderIdolSelect(); }
-        }
-        function deleteIdol() {
-            const name = document.getElementById('idol-select').value;
-            idols = idols.filter(i => i !== name);
-            localStorage.setItem('idol_list', JSON.stringify(idols));
-            renderIdolSelect();
+            data.idols.push({ name: document.getElementById('in-name').value, color: document.getElementById('in-color').value });
+            localStorage.setItem('app_data', JSON.stringify(data));
+            renderSelect();
         }
 
-        // --- 表示更新 ---
-        function updateDisplay() {
-            const now = new Date();
-            const dateStr = now.toLocaleDateString();
-            const idol = document.getElementById('idol-select').value || "---";
-            const code = Math.floor(1000 + Math.random() * 9000);
-            
-            document.getElementById('display-name').textContent = idol;
-            document.getElementById('display-date').textContent = dateStr;
-            document.getElementById('display-code').textContent = `No. ${code}-${cfg.terminalId}`;
+        function renderSelect() {
+            const s = document.getElementById('idol-select');
+            s.innerHTML = data.idols.map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+            updateUI();
         }
 
-        // --- カメラ起動 ---
-        async function startCamera() {
+        // カメラ
+        async function start() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 document.getElementById('video').srcObject = stream;
-            } catch(e) {
-                document.getElementById('debug-status').textContent = "カメラエラー: " + e.message;
-            }
+            } catch(e) { alert("カメラ許可が必要です"); }
         }
 
-        // --- 撮影 (iNSPiC用 2:3サイズに文字焼き付け) ---
-        document.getElementById('snap').onclick = () => {
+        // 撮影処理
+        function snap() {
             const video = document.getElementById('video');
             const canvas = document.getElementById('canvas');
             const ctx = canvas.getContext('2d');
+            canvas.width = 600; canvas.height = 900;
+            ctx.drawImage(video, 0, 0, 600, 900); // 簡略化して描画
             
-            // iNSPiCサイズ (2:3) 600x900px
-            canvas.width = 600;
-            canvas.height = 900;
+            // テキスト焼き付け
+            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
+            ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
+            const code = Math.floor(1000 + Math.random() * 9000);
+            ctx.fillText(`${document.getElementById('idol-select').value} No.${code}-${data.config.term}`, 20, 880);
             
-            // ビデオを中央でトリミングして描画
-            const vAspect = video.videoWidth / video.videoHeight;
-            const cAspect = 600 / 900;
-            let sx, sy, sw, sh;
-            if (vAspect > cAspect) {
-                sw = video.videoHeight * cAspect; sh = video.videoHeight;
-                sx = (video.videoWidth - sw) / 2; sy = 0;
-            } else {
-                sw = video.videoWidth; sh = video.videoWidth / cAspect;
-                sx = 0; sy = (video.videoHeight - sh) / 2;
-            }
-            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, 600, 900);
-            
-            // 文字を焼き付ける
-            ctx.fillStyle = "rgba(0,0,0,0.5)";
-            ctx.fillRect(0, 840, 600, 60);
-            ctx.fillStyle = "white";
-            ctx.font = "20px sans-serif";
-            ctx.fillText(`${document.getElementById('display-name').textContent}  ${document.getElementById('display-date').textContent}  ${document.getElementById('display-code').textContent}`, 20, 880);
-            
-            // 保存
-            const link = document.createElement('a');
-            link.download = `photo_${document.getElementById('display-code').textContent}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            updateDisplay(); // 次の番号へ
+            // 保存・更新
+            data.count++;
+            localStorage.setItem('app_data', JSON.stringify(data));
+            document.getElementById('modal-img').src = canvas.toDataURL();
+            document.getElementById('modal').style.display = 'flex';
+            updateUI();
+        }
+
+        // 一括アップロード
+        document.getElementById('file-picker').onchange = (e) => {
+            alert('アップロード機能を使用するにはCloudinary設定を確認してください');
         };
 
-        // イベント
-        document.getElementById('toggle-settings').onclick = () => {
-            const p = document.getElementById('settings-panel');
-            p.style.display = (p.style.display === 'block') ? 'none' : 'block';
-        };
-        document.getElementById('save-config').onclick = () => {
-            cfg.terminalId = document.getElementById('cfg-terminal-id').value;
-            localStorage.setItem('tokuten_config', JSON.stringify(cfg));
-            alert('保存しました');
-        };
-        document.getElementById('idol-select').onchange = updateDisplay;
-
-        // 開始
-        startCamera();
-        renderIdolSelect();
+        // 起動
+        renderSelect();
+        start();
     </script>
 </body>
 </html>
