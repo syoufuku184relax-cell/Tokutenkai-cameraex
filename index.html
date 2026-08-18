@@ -44,7 +44,7 @@
             font-size: 0.85em;
             font-weight: bold;
             cursor: pointer;
-            transition: background-color 0.2s ease;
+            transition: background-color 0.2s ease, color 0.2s ease;
         }
 
         /* 2. カメラプレビューエリア (アスペクト比 3:4) */
@@ -101,9 +101,10 @@
         }
 
         .btn-shutter { background: #e11d48; color: #fff; }
+        .btn-upload { background: #2563eb; color: #fff; }
         .btn-print-save { background: #059669; color: #fff; display: none; }
         .btn-retake { background: #4b5563; color: #fff; display: none; }
-        .btn-settings { background: #333; color: #ccc; margin-top: 6px; font-size: 0.85em; padding: 8px; }
+        .btn-settings { background: #333; color: #ccc; margin-top: 2px; font-size: 0.85em; padding: 8px; }
 
         #status-msg {
             text-align: center;
@@ -149,9 +150,7 @@
         }
 
         .member-grid-btn {
-            background: #2a2a2a;
             border: 2px solid #555;
-            color: #fff;
             padding: 10px;
             border-radius: 8px;
             font-weight: bold;
@@ -197,8 +196,12 @@
     <div class="controls">
         <div id="status-msg"></div>
         <button id="btn-shutter" class="btn btn-shutter" onclick="takePhoto()">撮影</button>
+        <!-- 撮影ボタンと追加設定ボタンの間に設置 -->
+        <button id="btn-upload" class="btn btn-upload" onclick="triggerBatchUpload()">一括送信</button>
+        
         <button id="btn-print-save" class="btn btn-print-save" onclick="printAndSave()">印刷＆保存実行</button>
         <button id="btn-retake" class="btn btn-retake" onclick="resetToCamera()">撮り直す</button>
+        
         <button class="btn btn-settings" onclick="openSettingsModal()">追加設定</button>
     </div>
 
@@ -219,7 +222,7 @@
                 <label>メンバー追加 (名前 / メンカラ)</label>
                 <div style="display:flex; gap:6px;">
                     <input type="text" id="input-mem-name" placeholder="名前" style="flex:2;">
-                    <input type="color" id="input-mem-color" value="#FF0000" style="flex:1; height:35px; padding:0;">
+                    <input type="color" id="input-mem-color" value="#FFFF00" style="flex:1; height:35px; padding:0;">
                 </div>
             </div>
             <button class="btn" style="background:#059669; color:#fff; padding:8px;" onclick="saveSettings()">メンバーを追加</button>
@@ -231,7 +234,6 @@
     <div id="print-area" style="display:none;"><img id="print-img"></div>
 
     <script>
-        // 【固定化完了】Cloudinary接続設定
         const CLOUD_NAME = "dfzxluvzy";
         const UPLOAD_PRESET = "CheerDream";
 
@@ -255,7 +257,6 @@
             generatedCode = generateUniqueCode(term);
             document.getElementById('display-code').innerText = `ID: ${generatedCode}`;
 
-            // URLからメンバー一覧を取得
             const rawMembers = params.getAll('member');
             rawMembers.forEach(raw => {
                 const parts = raw.split(':');
@@ -266,7 +267,6 @@
                 }
             });
 
-            // 初期選択メンバーの設定
             if (members.length > 0) {
                 selectMember(members[0]);
             } else {
@@ -318,18 +318,24 @@
             }
         }
 
+        // 背景色(HEX)の明暗を判定して文字色（白/黒）を返す関数
+        function getContrastTextColor(hexColor) {
+            const hex = hexColor.replace('#', '');
+            const r = parseInt(hex.substring(0, 2), 16) || 0;
+            const g = parseInt(hex.substring(2, 4), 16) || 0;
+            const b = parseInt(hex.substring(4, 6), 16) || 0;
+            
+            // 相対輝度計算 (黄色等の明るい色判定)
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness > 150 ? '#000000' : '#ffffff';
+        }
+
         function selectMember(member) {
             selectedMember = member;
             const btn = document.getElementById('member-btn');
             btn.innerText = member.name;
             btn.style.backgroundColor = `#${member.color}`;
-            
-            const rgb = parseInt(member.color, 16);
-            const r = (rgb >> 16) & 0xff;
-            const g = (rgb >> 8) & 0xff;
-            const b = (rgb >> 0) & 0xff;
-            const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            btn.style.color = luma > 128 ? '#000' : '#fff';
+            btn.style.color = getContrastTextColor(member.color);
         }
 
         function takePhoto() {
@@ -356,7 +362,6 @@
 
             ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
 
-            // 写真下部へ日付と識別番号を合成
             const dateStr = getTodayFormatted();
             const codeStr = `ID: ${generatedCode}`;
 
@@ -383,6 +388,7 @@
             previewImg.style.display = 'block';
             
             document.getElementById('btn-shutter').style.display = 'none';
+            document.getElementById('btn-upload').style.display = 'none';
             document.getElementById('btn-print-save').style.display = 'block';
             document.getElementById('btn-retake').style.display = 'block';
 
@@ -395,10 +401,24 @@
             document.getElementById('preview-img').style.display = 'none';
             
             document.getElementById('btn-shutter').style.display = 'block';
+            document.getElementById('btn-upload').style.display = 'block';
             document.getElementById('btn-print-save').style.display = 'none';
             document.getElementById('btn-retake').style.display = 'none';
             
             showStatus('');
+        }
+
+        // 手動での一括送信ボタン押下処理
+        async function triggerBatchUpload() {
+            if (!finalImageBlob) {
+                showStatus('送信する画像がありません。先に撮影してください', true);
+                return;
+            }
+            showStatus('送信中...');
+            const success = await uploadToCloudinary(finalImageBlob);
+            if (success) {
+                showStatus('一括送信が完了しました！');
+            }
         }
 
         async function printAndSave() {
@@ -430,6 +450,7 @@
                 btn.className = 'member-grid-btn';
                 btn.innerText = m.name;
                 btn.style.backgroundColor = `#${m.color}`;
+                btn.style.color = getContrastTextColor(m.color);
                 btn.onclick = () => {
                     selectMember(m);
                     closeModal('member-modal');
@@ -475,12 +496,15 @@
             formData.append('tags', tags.join(','));
 
             try {
-                await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
                     method: 'POST',
                     body: formData
                 });
+                return res.ok;
             } catch (err) {
                 console.error("保存失敗:", err);
+                showStatus('送信失敗: ネットワークエラー', true);
+                return false;
             }
         }
 
