@@ -9,7 +9,6 @@
         .container { max-width: 500px; margin: 0 auto; }
         .header-stats { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; }
         
-        /* 右上の名前タップで選択ポップアップを表示 */
         #display-name { padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; user-select: none; transition: transform 0.1s; }
         #display-name:active { transform: scale(0.95); }
         
@@ -25,9 +24,6 @@
         
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { width: 90%; max-width: 400px; background: #1e1e1e; padding: 20px; border-radius: 12px; text-align: center; box-sizing: border-box; }
-        .modal-content img { width: 100%; border: 5px solid #fff; }
-
-        /* アイドル選択モーダル用のスタイル */
         .idol-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; max-height: 60vh; overflow-y: auto; }
         .idol-btn { padding: 15px 10px; border-radius: 8px; font-size: 16px; font-weight: bold; border: 2px solid transparent; text-shadow: 0 0 3px rgba(0,0,0,0.8); }
 
@@ -44,7 +40,6 @@
     <div class="container">
         <div class="header-stats">
             <div>撮影枚数: <span id="photo-count">0</span></div>
-            <!-- 右上のタップでアイドル選択モーダル(openSelectModal)を起動 -->
             <div id="display-name" onclick="openSelectModal()" title="タップして変更">---</div>
         </div>
 
@@ -53,22 +48,20 @@
         <div id="settings-panel" class="settings-panel">
             <strong>1. アイドル選択・管理</strong>
             <select id="idol-select" onchange="updateUI()"></select>
-            <input type="text" id="in-name" placeholder="新しい名前">
+            <input type="text" id="in-name" placeholder="名前">
             <select id="in-color">
                 <option value="#ff0000">赤</option><option value="#0000ff">青</option>
                 <option value="#800080">紫</option><option value="#87ceeb">水色</option>
                 <option value="#008000">緑</option><option value="#ffff00">黄</option>
                 <option value="#ffc0cb">ピンク</option><option value="#ffffff">白</option>
-                <option value="#50c878">エメラルドグリーン</option>
             </select>
-            <input type="text" id="in-custom-color" placeholder="またはHEXコードを入力 (#FF5733)">
             <button onclick="addIdol()" style="background:#059669;">追加</button>
             <button onclick="deleteIdol()" style="background:#991b1b;">削除</button>
             <hr style="margin:15px 0;">
-            <strong>2. 端末/クラウド設定</strong>
+            <strong>2. クラウド・アップロード設定</strong>
             <input type="text" id="cfg-term" placeholder="端末ID">
-            <input type="text" id="cfg-cloud" placeholder="Cloud Name" readonly style="color:#888;">
-            <input type="text" id="cfg-preset" placeholder="Preset" readonly style="color:#888;">
+            <input type="text" id="cfg-cloud" placeholder="Cloud Name">
+            <input type="text" id="cfg-preset" placeholder="Preset">
             <input type="text" id="cfg-group" placeholder="グループ名 (フォルダ名)">
             <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
             <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2; margin-top:10px;">📂 写真を一括送信</button>
@@ -81,7 +74,6 @@
         <button class="btn-snap" onclick="snap()">📸 撮影</button>
     </div>
 
-    <!-- アイドル選択用ポップアップ（モーダル） -->
     <div id="select-modal" class="modal">
         <div class="modal-content">
             <h3 style="margin-top:0;">撮影するアイドルを選択</h3>
@@ -90,7 +82,6 @@
         </div>
     </div>
 
-    <!-- 撮影確認用モーダル -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <img id="modal-img">
@@ -103,21 +94,18 @@
     <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
-        const DEFAULT_CLOUD = 'dfzxluvzy';
-        const DEFAULT_PRESET = 'CheerDream';
-
-        let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud: DEFAULT_CLOUD, preset: DEFAULT_PRESET, group:''}, count: 0 };
-
-        if (!data.config.cloud) data.config.cloud = DEFAULT_CLOUD;
-        if (!data.config.preset) data.config.preset = DEFAULT_PRESET;
+        // 初回起動時のデフォルト（URL指定がない場合の保険）
+        let data = JSON.parse(localStorage.getItem('app_data')) || { 
+            idols: [], 
+            config: { term:'A', cloud: '', preset: '', group:'' }, 
+            count: 0 
+        };
 
         function applyUrlParameters() {
             const params = new URLSearchParams(window.location.search);
             let updated = false;
 
             if (params.has('term')) { data.config.term = params.get('term'); updated = true; }
-            if (params.has('cloud')) { data.config.cloud = params.get('cloud'); updated = true; }
-            if (params.has('preset')) { data.config.preset = params.get('preset'); updated = true; }
             if (params.has('group')) { data.config.group = params.get('group'); updated = true; }
             
             const members = params.getAll('member');
@@ -132,23 +120,6 @@
             });
 
             if (updated) { localStorage.setItem('app_data', JSON.stringify(data)); }
-        }
-
-        function generateUniqueCode() {
-            const today = new Date().toISOString().split('T')[0];
-            const storageKey = 'used_codes_' + today;
-            let usedCodes = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let code = '';
-            do {
-                code = '';
-                for (let i = 0; i < 4; i++) {
-                    code += chars.charAt(Math.floor(Math.random() * chars.length));
-                }
-            } while (usedCodes.includes(code));
-            usedCodes.push(code);
-            localStorage.setItem(storageKey, JSON.stringify(usedCodes));
-            return code;
         }
 
         function getContrastYIQ(hexcolor){
@@ -176,65 +147,47 @@
                 display.style.color = 'white';
             }
             document.getElementById('photo-count').textContent = data.count;
-            document.getElementById('cfg-term').value = data.config.term || 'A';
-            document.getElementById('cfg-cloud').value = data.config.cloud || DEFAULT_CLOUD;
-            document.getElementById('cfg-preset').value = data.config.preset || DEFAULT_PRESET;
-            document.getElementById('cfg-group').value = data.config.group || '';
+            
+            document.getElementById('cfg-term').value = data.config.term;
+            document.getElementById('cfg-cloud').value = data.config.cloud;
+            document.getElementById('cfg-preset').value = data.config.preset;
+            document.getElementById('cfg-group').value = data.config.group;
         }
 
-        /* --- 選択ポップアップの制御 --- */
         function openSelectModal() {
-            if (data.idols.length === 0) return alert('アイドルが登録されていません。');
+            if (data.idols.length === 0) return alert('メンバーが登録されていません。');
             const grid = document.getElementById('idol-grid');
             grid.innerHTML = '';
-            
             data.idols.forEach(i => {
                 const btn = document.createElement('button');
                 btn.className = 'idol-btn';
                 btn.textContent = i.name;
                 btn.style.backgroundColor = i.color;
                 btn.style.color = getContrastYIQ(i.color);
-                btn.onclick = () => {
-                    selectIdolByName(i.name);
-                    closeSelectModal();
-                };
+                btn.onclick = () => { selectIdolByName(i.name); closeSelectModal(); };
                 grid.appendChild(btn);
             });
             document.getElementById('select-modal').style.display = 'flex';
         }
 
-        function closeSelectModal() {
-            document.getElementById('select-modal').style.display = 'none';
-        }
-
-        function selectIdolByName(name) {
-            const select = document.getElementById('idol-select');
-            select.value = name;
-            updateUI();
-        }
+        function closeSelectModal() { document.getElementById('select-modal').style.display = 'none'; }
+        function selectIdolByName(name) { document.getElementById('idol-select').value = name; updateUI(); }
 
         function saveSettings() {
-            data.config = { 
-                term: document.getElementById('cfg-term').value, 
-                cloud: DEFAULT_CLOUD, 
-                preset: DEFAULT_PRESET,
-                group: document.getElementById('cfg-group').value
-            };
+            data.config.term = document.getElementById('cfg-term').value;
+            data.config.cloud = document.getElementById('cfg-cloud').value;
+            data.config.preset = document.getElementById('cfg-preset').value;
+            data.config.group = document.getElementById('cfg-group').value;
             localStorage.setItem('app_data', JSON.stringify(data));
             alert('保存しました');
         }
 
         function addIdol() {
-            const nameInput = document.getElementById('in-name');
-            const customColor = document.getElementById('in-custom-color').value;
-            const selectColor = document.getElementById('in-color').value;
-            const name = nameInput.value;
+            const name = document.getElementById('in-name').value;
+            const color = document.getElementById('in-color').value;
             if(!name) return;
-            const color = (customColor.startsWith('#') && customColor.length === 7) ? customColor : selectColor;
             data.idols.push({ name: name, color: color });
             localStorage.setItem('app_data', JSON.stringify(data));
-            nameInput.value = '';
-            document.getElementById('in-custom-color').value = '';
             renderSelect();
         }
 
@@ -262,23 +215,17 @@
         document.getElementById('file-picker').onchange = async (e) => {
             const files = e.target.files;
             if(!files.length) return;
+            if (!data.config.cloud || !data.config.preset) return alert('Cloud NameとPresetを設定してください。');
             
-            alert('送信を開始します。完了メッセージが出るまでお待ちください。');
-            
+            alert('送信を開始します。');
             for(let file of files) {
                 const fd = new FormData();
                 fd.append('file', file);
-                fd.append('upload_preset', data.config.preset || DEFAULT_PRESET);
-                
-                if (data.config.group) {
-                    fd.append('folder', data.config.group);
-                }
-                
+                fd.append('upload_preset', data.config.preset);
+                if (data.config.group) fd.append('folder', data.config.group);
                 try {
-                    await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud || DEFAULT_CLOUD}/image/upload`, { method:'POST', body:fd });
-                } catch(err) {
-                    console.error(err);
-                }
+                    await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud}/image/upload`, { method:'POST', body:fd });
+                } catch(err) { console.error(err); }
             }
             alert('送信完了しました！枚数をリセットします。');
             data.count = 0;
@@ -301,28 +248,19 @@
             ctx.drawImage(video, 0, 0, 600, 900);
             const now = new Date();
             const dateStr = now.toLocaleDateString();
-            const code = generateUniqueCode();
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
             ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
-            ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${code}-${data.config.term}`, 20, 880);
+            ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${data.count+1}-${data.config.term}`, 20, 880);
             document.getElementById('modal-img').src = canvas.toDataURL('image/png');
             document.getElementById('modal').style.display = 'flex';
         }
 
         function confirmPrintAndSave() {
-            const modalImg = document.getElementById('modal-img');
             const link = document.createElement('a');
-            const now = new Date();
-            const filename = `photo_${now.getTime()}.png`;
-            
-            link.href = modalImg.src;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
+            link.href = document.getElementById('modal-img').src;
+            link.download = `photo_${Date.now()}.png`;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
             window.print();
-
             data.count++;
             localStorage.setItem('app_data', JSON.stringify(data));
             document.getElementById('modal').style.display = 'none';
