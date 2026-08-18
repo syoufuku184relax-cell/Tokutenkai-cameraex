@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+   <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -97,7 +97,7 @@
             cursor: not-allowed;
         }
 
-        /* 撮影ボタンより下へ移動した設定パネル */
+        /* 撮影ボタンより下へ配置された設定パネル */
         .settings-panel {
             width: 100%;
             max-width: 500px;
@@ -165,18 +165,13 @@
         <div id="status-msg"></div>
     </div>
 
-    <!-- 撮影ボタンより下に配置された設定エリア -->
+    <!-- 撮影ボタンより下に配置された設定エリア（カメラ選択を排除） -->
     <div class="settings-panel">
         <h2>カメラ設定</h2>
         
         <div class="setting-item">
-            <label for="camera-select">カメラ切り替え</label>
-            <select id="camera-select" onchange="startCamera()"></select>
-        </div>
-
-        <div class="setting-item">
             <label for="resolution-select">画質（解像度）</label>
-            <select id="resolution-select" onchange="startCamera()">
+            <select id="resolution-select" onchange="startRearCamera()">
                 <option value="1920x1080" selected>1080p (FHD)</option>
                 <option value="1280x720">720p (HD)</option>
                 <option value="640x480">480p (SD)</option>
@@ -188,14 +183,14 @@
     <canvas id="capture-canvas" style="display:none;"></canvas>
 
     <script>
-        // 【固定設定】Cloudinary設定（画面上からは削除し固定化）
-        const CLOUD_NAME = "dfzxluvzy"; 
-        const UPLOAD_PRESET = "CheerDream"; 
+        // 【固定設定】Cloudinary設定
+        const CLOUD_NAME = "YOUR_CLOUD_NAME"; 
+        const UPLOAD_PRESET = "YOUR_UPLOAD_PRESET"; 
 
         let selectedMember = null;
         let currentStream = null;
 
-        // 1. 初期化・URLパラメータ解析（安全化処理追加）
+        // 1. 初期化・URLパラメータ解析
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             
@@ -205,7 +200,7 @@
             document.getElementById('display-term').innerText = `端末: ${term}`;
             document.getElementById('display-group').innerText = `グループ: ${group}`;
 
-            // メンバー情報の安全なパース (フリーズ対策)
+            // メンバー情報の安全なパース
             const rawMembers = params.getAll('member');
             const memberBar = document.getElementById('member-bar');
             
@@ -214,7 +209,6 @@
                     const [name, colorHex] = raw.split(':');
                     if (!name) return;
 
-                    // カラーコードの清掃（#の重複除去とフォールバック）
                     const cleanColor = colorHex ? colorHex.replace('#', '').trim() : 'FFFFFF';
                     
                     const btn = document.createElement('button');
@@ -225,15 +219,14 @@
                     
                     memberBar.appendChild(btn);
 
-                    // 最初のメンバーを初期選択
                     if (index === 0) selectMember(btn, { name, color: cleanColor });
                 } catch (e) {
                     console.error("メンバーパラメータ解析エラー:", e);
                 }
             });
 
-            // 利用可能なデバイス（カメラ）を取得
-            getCameras();
+            // 外カメラ直接起動
+            startRearCamera();
         });
 
         function selectMember(btnElement, memberData) {
@@ -242,41 +235,18 @@
             selectedMember = memberData;
         }
 
-        // 2. カメラデバイス一覧の取得と起動
-        async function getCameras() {
-            try {
-                // カメラアクセスの許可を取得
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                
-                const cameraSelect = document.getElementById('camera-select');
-                cameraSelect.innerHTML = '';
-                
-                videoDevices.forEach((device, i) => {
-                    const option = document.createElement('option');
-                    option.value = device.deviceId;
-                    option.text = device.label || `カメラ ${i + 1}`;
-                    cameraSelect.appendChild(option);
-                });
-
-                startCamera();
-            } catch (err) {
-                showStatus('カメラのアクセス許可が必要です: ' + err.message, true);
-            }
-        }
-
-        async function startCamera() {
+        // 2. 外カメラ（リアカメラ）専用の起動処理
+        async function startRearCamera() {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
             }
 
-            const deviceId = document.getElementById('camera-select').value;
             const [width, height] = document.getElementById('resolution-select').value.split('x').map(Number);
 
-            const constraints = {
+            // まず外カメラ厳密指定（exact: "environment"）で試行し、失敗した場合はフォールバック
+            let constraints = {
                 video: {
-                    deviceId: deviceId ? { exact: deviceId } : undefined,
+                    facingMode: { exact: "environment" },
                     width: { ideal: width },
                     height: { ideal: height }
                 }
@@ -286,7 +256,16 @@
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 document.getElementById('webcam').srcObject = currentStream;
             } catch (err) {
-                showStatus('カメラ起動失敗: ' + err.message, true);
+                console.warn("exact指定失敗。通常の外カメ指定にフォールバックします。", err);
+                
+                // Androidなどの一部端末向けの柔軟な外カメ指定設定
+                constraints.video.facingMode = "environment";
+                try {
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    document.getElementById('webcam').srcObject = currentStream;
+                } catch (fallbackErr) {
+                    showStatus('外カメラの起動に失敗しました: ' + fallbackErr.message, true);
+                }
             }
         }
 
@@ -305,7 +284,6 @@
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // Blob形式に変換
                 canvas.toBlob(async (blob) => {
                     if (!blob) {
                         showStatus('画像生成エラー', true);
@@ -332,7 +310,6 @@
             formData.append('file', blob);
             formData.append('upload_preset', UPLOAD_PRESET);
             
-            // 検索・識別用タグの設定
             if (selectedMember) {
                 formData.append('tags', `member_${selectedMember.name}`);
             }
