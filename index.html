@@ -23,6 +23,15 @@
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { width: 90%; max-width: 400px; text-align: center; }
         .modal-content img { width: 100%; border: 5px solid #fff; }
+
+        /* 印刷時に余計なUIを隠して画像のみを印刷する設定 */
+        @media print {
+            body * { visibility: hidden; }
+            #modal, #modal * { visibility: visible; }
+            #modal { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: none; }
+            .modal-content button { display: none; }
+            .modal-content img { border: none; width: 100%; }
+        }
     </style>
 </head>
 <body>
@@ -51,8 +60,8 @@
             <hr style="margin:15px 0;">
             <strong>2. 端末/クラウド設定</strong>
             <input type="text" id="cfg-term" placeholder="端末ID">
-            <input type="text" id="cfg-cloud" placeholder="Cloud Name">
-            <input type="text" id="cfg-preset" placeholder="Preset">
+            <input type="text" id="cfg-cloud" placeholder="Cloud Name" readonly style="color:#888;">
+            <input type="text" id="cfg-preset" placeholder="Preset" readonly style="color:#888;">
             <input type="text" id="cfg-group" placeholder="グループ名 (フォルダ名)">
             <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
             <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2; margin-top:10px;">📂 写真を一括送信</button>
@@ -68,7 +77,7 @@
     <div id="modal" class="modal">
         <div class="modal-content">
             <img id="modal-img">
-            <button onclick="confirmPrint()" style="background:#2563eb; margin-top:10px;">💾 保存して完了 (カウント追加)</button>
+            <button onclick="confirmPrintAndSave()" style="background:#2563eb; margin-top:10px; font-size: 16px;">🖨 保存して印刷 (カウント追加)</button>
             <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b; margin-top:5px;">撮り直す</button>
         </div>
     </div>
@@ -77,7 +86,15 @@
     <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
-        let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:'', group:''}, count: 0 };
+        // デフォルト固定値
+        const DEFAULT_CLOUD = 'dfzxluvzy';
+        const DEFAULT_PRESET = 'CheerDream';
+
+        let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud: DEFAULT_CLOUD, preset: DEFAULT_PRESET, group:''}, count: 0 };
+
+        // 常に固定値を保持させる処理
+        if (!data.config.cloud) data.config.cloud = DEFAULT_CLOUD;
+        if (!data.config.preset) data.config.preset = DEFAULT_PRESET;
 
         function applyUrlParameters() {
             const params = new URLSearchParams(window.location.search);
@@ -88,7 +105,6 @@
             if (params.has('preset')) { data.config.preset = params.get('preset'); updated = true; }
             if (params.has('group')) { data.config.group = params.get('group'); updated = true; }
             
-            // メンカラ指定付き (member=名前:カラーコード)
             const members = params.getAll('member');
             members.forEach(m => {
                 const parts = m.split(':');
@@ -142,20 +158,20 @@
             } else {
                 display.textContent = '---';
                 display.style.backgroundColor = 'transparent';
-                display.style.color = 'white';
+                display.color = 'white';
             }
             document.getElementById('photo-count').textContent = data.count;
-            document.getElementById('cfg-term').value = data.config.term || '';
-            document.getElementById('cfg-cloud').value = data.config.cloud || '';
-            document.getElementById('cfg-preset').value = data.config.preset || '';
+            document.getElementById('cfg-term').value = data.config.term || 'A';
+            document.getElementById('cfg-cloud').value = data.config.cloud || DEFAULT_CLOUD;
+            document.getElementById('cfg-preset').value = data.config.preset || DEFAULT_PRESET;
             document.getElementById('cfg-group').value = data.config.group || '';
         }
 
         function saveSettings() {
             data.config = { 
                 term: document.getElementById('cfg-term').value, 
-                cloud: document.getElementById('cfg-cloud').value, 
-                preset: document.getElementById('cfg-preset').value,
+                cloud: DEFAULT_CLOUD, 
+                preset: DEFAULT_PRESET,
                 group: document.getElementById('cfg-group').value
             };
             localStorage.setItem('app_data', JSON.stringify(data));
@@ -200,21 +216,20 @@
         document.getElementById('file-picker').onchange = async (e) => {
             const files = e.target.files;
             if(!files.length) return;
-            if(!data.config.cloud) return alert('Cloud Nameが未設定です');
             
             alert('送信を開始します。完了メッセージが出るまでお待ちください。');
             
             for(let file of files) {
                 const fd = new FormData();
                 fd.append('file', file);
-                fd.append('upload_preset', data.config.preset);
+                fd.append('upload_preset', data.config.preset || DEFAULT_PRESET);
                 
                 if (data.config.group) {
                     fd.append('folder', data.config.group);
                 }
                 
                 try {
-                    await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud}/image/upload`, { method:'POST', body:fd });
+                    await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud || DEFAULT_CLOUD}/image/upload`, { method:'POST', body:fd });
                 } catch(err) {
                     console.error(err);
                 }
@@ -248,8 +263,9 @@
             document.getElementById('modal').style.display = 'flex';
         }
 
-        // 保存ボタンが押された時の処理（画像を自動ダウンロードして完了）
-        function confirmPrint() {
+        // 保存と印刷を同時に行う関数
+        function confirmPrintAndSave() {
+            // 1. 端末へのダウンロード保存処理
             const modalImg = document.getElementById('modal-img');
             const link = document.createElement('a');
             const now = new Date();
@@ -261,6 +277,10 @@
             link.click();
             document.body.removeChild(link);
 
+            // 2. 印刷ダイアログの呼び出し
+            window.print();
+
+            // 3. カウントアップとモーダルを閉じる処理
             data.count++;
             localStorage.setItem('app_data', JSON.stringify(data));
             document.getElementById('modal').style.display = 'none';
