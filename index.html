@@ -8,7 +8,10 @@
         body { font-family: sans-serif; background: #121212; color: #fff; margin: 0; padding: 10px; }
         .container { max-width: 500px; margin: 0 auto; }
         .header-stats { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #1e1e1e; border-radius: 8px; margin-bottom: 10px; }
-        #display-name { padding: 4px 10px; border-radius: 4px; font-weight: bold; }
+        
+        /* 右上の名前タップで選択ポップアップを表示 */
+        #display-name { padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; user-select: none; transition: transform 0.1s; }
+        #display-name:active { transform: scale(0.95); }
         
         #preview-container { position: relative; width: 100%; aspect-ratio: 2/3; overflow: hidden; background: #000; border: 5px solid #444; }
         video { width: 100%; height: 100%; object-fit: cover; }
@@ -20,11 +23,14 @@
         .btn-toggle { background: #6b7280; color: #fff; } 
         .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; margin-top: 10px; }
         
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { width: 90%; max-width: 400px; text-align: center; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { width: 90%; max-width: 400px; background: #1e1e1e; padding: 20px; border-radius: 12px; text-align: center; box-sizing: border-box; }
         .modal-content img { width: 100%; border: 5px solid #fff; }
 
-        /* 印刷時に余計なUIを隠して画像のみを印刷する設定 */
+        /* アイドル選択モーダル用のスタイル */
+        .idol-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0; max-height: 60vh; overflow-y: auto; }
+        .idol-btn { padding: 15px 10px; border-radius: 8px; font-size: 16px; font-weight: bold; border: 2px solid transparent; text-shadow: 0 0 3px rgba(0,0,0,0.8); }
+
         @media print {
             body * { visibility: hidden; }
             #modal, #modal * { visibility: visible; }
@@ -38,7 +44,8 @@
     <div class="container">
         <div class="header-stats">
             <div>撮影枚数: <span id="photo-count">0</span></div>
-            <div id="display-name">---</div>
+            <!-- 右上のタップでアイドル選択モーダル(openSelectModal)を起動 -->
+            <div id="display-name" onclick="openSelectModal()" title="タップして変更">---</div>
         </div>
 
         <button class="btn-toggle" onclick="document.getElementById('settings-panel').style.display = (document.getElementById('settings-panel').style.display === 'block' ? 'none' : 'block')">⚙ 設定・管理</button>
@@ -74,6 +81,16 @@
         <button class="btn-snap" onclick="snap()">📸 撮影</button>
     </div>
 
+    <!-- アイドル選択用ポップアップ（モーダル） -->
+    <div id="select-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0;">撮影するアイドルを選択</h3>
+            <div id="idol-grid" class="idol-grid"></div>
+            <button onclick="closeSelectModal()" style="background:#4b5563;">キャンセル</button>
+        </div>
+    </div>
+
+    <!-- 撮影確認用モーダル -->
     <div id="modal" class="modal">
         <div class="modal-content">
             <img id="modal-img">
@@ -86,13 +103,11 @@
     <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
-        // デフォルト固定値
         const DEFAULT_CLOUD = 'dfzxluvzy';
         const DEFAULT_PRESET = 'CheerDream';
 
         let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud: DEFAULT_CLOUD, preset: DEFAULT_PRESET, group:''}, count: 0 };
 
-        // 常に固定値を保持させる処理
         if (!data.config.cloud) data.config.cloud = DEFAULT_CLOUD;
         if (!data.config.preset) data.config.preset = DEFAULT_PRESET;
 
@@ -151,20 +166,51 @@
             const display = document.getElementById('display-name');
             
             if(idol) {
-                display.textContent = idol.name;
+                display.textContent = idol.name + " ▼";
                 display.style.backgroundColor = idol.color;
                 display.style.color = getContrastYIQ(idol.color);
                 document.getElementById('preview-container').style.borderColor = idol.color;
             } else {
-                display.textContent = '---';
-                display.style.backgroundColor = 'transparent';
-                display.color = 'white';
+                display.textContent = '選択してください ▼';
+                display.style.backgroundColor = '#333';
+                display.style.color = 'white';
             }
             document.getElementById('photo-count').textContent = data.count;
             document.getElementById('cfg-term').value = data.config.term || 'A';
             document.getElementById('cfg-cloud').value = data.config.cloud || DEFAULT_CLOUD;
             document.getElementById('cfg-preset').value = data.config.preset || DEFAULT_PRESET;
             document.getElementById('cfg-group').value = data.config.group || '';
+        }
+
+        /* --- 選択ポップアップの制御 --- */
+        function openSelectModal() {
+            if (data.idols.length === 0) return alert('アイドルが登録されていません。');
+            const grid = document.getElementById('idol-grid');
+            grid.innerHTML = '';
+            
+            data.idols.forEach(i => {
+                const btn = document.createElement('button');
+                btn.className = 'idol-btn';
+                btn.textContent = i.name;
+                btn.style.backgroundColor = i.color;
+                btn.style.color = getContrastYIQ(i.color);
+                btn.onclick = () => {
+                    selectIdolByName(i.name);
+                    closeSelectModal();
+                };
+                grid.appendChild(btn);
+            });
+            document.getElementById('select-modal').style.display = 'flex';
+        }
+
+        function closeSelectModal() {
+            document.getElementById('select-modal').style.display = 'none';
+        }
+
+        function selectIdolByName(name) {
+            const select = document.getElementById('idol-select');
+            select.value = name;
+            updateUI();
         }
 
         function saveSettings() {
@@ -263,9 +309,7 @@
             document.getElementById('modal').style.display = 'flex';
         }
 
-        // 保存と印刷を同時に行う関数
         function confirmPrintAndSave() {
-            // 1. 端末へのダウンロード保存処理
             const modalImg = document.getElementById('modal-img');
             const link = document.createElement('a');
             const now = new Date();
@@ -277,10 +321,8 @@
             link.click();
             document.body.removeChild(link);
 
-            // 2. 印刷ダイアログの呼び出し
             window.print();
 
-            // 3. カウントアップとモーダルを閉じる処理
             data.count++;
             localStorage.setItem('app_data', JSON.stringify(data));
             document.getElementById('modal').style.display = 'none';
