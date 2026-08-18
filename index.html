@@ -6,161 +6,37 @@
     <title>特典会カメラアプリ</title>
     <style>
         * { box-sizing: border-box; }
-        body {
-            font-family: sans-serif;
-            background: #000;
-            color: #fff;
-            margin: 0;
-            padding: 8px 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
+        body { font-family: sans-serif; background: #000; color: #fff; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
 
-        /* 1. 上部ヘッダー（左：端末ID / グループ名、右：選択中のメンバーボタン） */
-        .header-info {
-            width: 100%;
-            max-width: 380px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
-        }
+        /* ヘッダー (端末ID / グループ名 / メンバー選択) */
+        .header-info { width: 100%; max-width: 380px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .header-left { font-size: 0.85em; color: #4ade80; font-weight: bold; }
+        .member-select-btn { padding: 5px 14px; border-radius: 16px; font-size: 0.85em; font-weight: bold; cursor: pointer; border: 1px solid #fff; transition: background-color 0.2s, color 0.2s; }
 
-        .header-left {
-            font-size: 0.85em;
-            color: #4ade80;
-            font-weight: bold;
-        }
-
-        /* 右上：選択されたメンバーのメンカラが背景色になるボタン */
-        .member-select-btn {
-            background: #2563eb;
-            color: #fff;
-            border: 1px solid #fff;
-            padding: 5px 14px;
-            border-radius: 16px;
-            font-size: 0.85em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.2s ease, color 0.2s ease;
-        }
-
-        /* 2. カメラプレビューエリア (アスペクト比 3:4) */
-        #camera-container {
-            position: relative;
-            width: 100%;
-            max-width: 380px;
-            aspect-ratio: 3 / 4;
-            background: #111;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-        }
-
-        video, #preview-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-        }
-
+        /* カメラプレビュー (3:4) */
+        #camera-container { position: relative; width: 100%; max-width: 380px; aspect-ratio: 3 / 4; background: #111; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
+        video, #preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
         #preview-img { display: none; }
 
-        /* 3. 画面下部情報（日付・認識番号） */
-        .footer-info {
-            width: 100%;
-            max-width: 380px;
-            display: flex;
-            justify-content: space-between;
-            margin-top: 6px;
-            font-size: 0.8em;
-            color: #aaa;
-            font-family: monospace;
-        }
+        /* フッター（次回撮影用の認識ID・未送信枚数） */
+        .footer-info { width: 100%; max-width: 380px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; font-family: monospace; }
 
-        /* 4. 操作ボタン群 */
-        .controls {
-            width: 100%;
-            max-width: 380px;
-            margin-top: 8px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 12px;
-            font-size: 1em;
-            font-weight: bold;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-
+        /* ボタンエリア */
+        .controls { width: 100%; max-width: 380px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+        .btn { width: 100%; padding: 12px; font-size: 1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
         .btn-shutter { background: #e11d48; color: #fff; }
-        .btn-upload { background: #2563eb; color: #fff; }
         .btn-print-save { background: #059669; color: #fff; display: none; }
         .btn-retake { background: #4b5563; color: #fff; display: none; }
-        .btn-settings { background: #333; color: #ccc; margin-top: 2px; font-size: 0.85em; padding: 8px; }
+        .btn-upload { background: #2563eb; color: #fff; margin-top: 6px; }
+        .btn-settings { background: #333; color: #ccc; font-size: 0.85em; padding: 8px; }
 
-        #status-msg {
-            text-align: center;
-            font-size: 0.8em;
-            color: #4ade80;
-            min-height: 1.2em;
-        }
-
-        /* 5. ポップアップモーダル */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
-
-        .modal-content {
-            background: #1e1e1e;
-            width: 90%;
-            max-width: 340px;
-            padding: 16px;
-            border-radius: 12px;
-            border: 1px solid #333;
-        }
-
-        .modal-title {
-            font-size: 1em;
-            font-weight: bold;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 6px;
-        }
-
-        .member-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px;
-            max-height: 250px;
-            overflow-y: auto;
-        }
-
-        .member-grid-btn {
-            border: 2px solid #555;
-            padding: 10px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .setting-group { margin-bottom: 10px; }
-        .setting-group label { display: block; font-size: 0.8em; color: #aaa; margin-bottom: 4px; }
-        .setting-group input { width: 100%; padding: 8px; background: #000; color: #fff; border: 1px solid #444; border-radius: 4px; }
+        #status-msg { text-align: center; font-size: 0.85em; color: #4ade80; min-height: 1.2em; }
         
+        /* モーダル */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: #1e1e1e; width: 90%; max-width: 340px; padding: 16px; border-radius: 12px; border: 1px solid #333; }
+        .member-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 250px; overflow-y: auto; }
+        .member-grid-btn { border: 2px solid #555; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
         .modal-close-btn { background: #666; color: #fff; border: none; padding: 8px; width: 100%; border-radius: 6px; margin-top: 10px; cursor: pointer; }
 
         @media print {
@@ -172,63 +48,35 @@
 </head>
 <body>
 
-    <!-- ヘッダー (左：端末ID/グループ名 / 右：選択中のメンバー表示＆ポップアップ呼び出し) -->
     <div class="header-info">
-        <div class="header-left">
-            端末: <span id="display-term">--</span> / グループ: <span id="display-group">--</span>
-        </div>
+        <div class="header-left">端末:<span id="display-term">--</span> / G:<span id="display-group">--</span></div>
         <button class="member-select-btn" id="member-btn" onclick="openMemberModal()">メンバー選択</button>
     </div>
 
-    <!-- 3:4 カメラ / プレビュー画面 -->
     <div id="camera-container">
         <video id="webcam" autoplay playsinline></video>
-        <img id="preview-img" alt="撮影プレビュー">
+        <img id="preview-img" alt="プレビュー">
     </div>
 
-    <!-- 下部：日付・認識番号 -->
     <div class="footer-info">
-        <span id="display-date">2026/08/19</span>
-        <span id="display-code">ID: --</span>
+        <div>次回ID: <span id="display-code" style="color:#fff; font-weight:bold;">--</span></div>
+        <div>本日撮影累計: <span id="display-count" style="color:#4ade80; font-weight:bold;">0</span>枚</div>
     </div>
 
-    <!-- 操作ボタン部 -->
     <div class="controls">
         <div id="status-msg"></div>
         <button id="btn-shutter" class="btn btn-shutter" onclick="takePhoto()">撮影</button>
-        <!-- 撮影ボタンと追加設定ボタンの間に設置 -->
-        <button id="btn-upload" class="btn btn-upload" onclick="triggerBatchUpload()">一括送信</button>
-        
-        <button id="btn-print-save" class="btn btn-print-save" onclick="printAndSave()">印刷＆保存実行</button>
+        <button id="btn-print-save" class="btn btn-print-save" onclick="printAndSave()">印刷＆保存（確定）</button>
         <button id="btn-retake" class="btn btn-retake" onclick="resetToCamera()">撮り直す</button>
         
+        <!-- イベント終了後に電波の良い場所で押す一括送信ボタン -->
+        <button id="btn-upload" class="btn btn-upload" onclick="triggerBatchUpload()">一括送信（イベント終了後）</button>
         <button class="btn btn-settings" onclick="openSettingsModal()">追加設定</button>
     </div>
 
-    <!-- メンバー選択 ポップアップモーダル -->
-    <div id="member-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-title">メンバー選択</div>
-            <div class="member-grid" id="member-grid"></div>
-            <button class="modal-close-btn" onclick="closeModal('member-modal')">閉じる</button>
-        </div>
-    </div>
-
-    <!-- 現場用 追加設定 ポップアップモーダル -->
-    <div id="settings-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-title">現場用 メンバー追加</div>
-            <div class="setting-group">
-                <label>メンバー追加 (名前 / メンカラ)</label>
-                <div style="display:flex; gap:6px;">
-                    <input type="text" id="input-mem-name" placeholder="名前" style="flex:2;">
-                    <input type="color" id="input-mem-color" value="#FFFF00" style="flex:1; height:35px; padding:0;">
-                </div>
-            </div>
-            <button class="btn" style="background:#059669; color:#fff; padding:8px;" onclick="saveSettings()">メンバーを追加</button>
-            <button class="modal-close-btn" onclick="closeModal('settings-modal')">閉じる</button>
-        </div>
-    </div>
+    <!-- モーダル各種 -->
+    <div id="member-modal" class="modal"><div class="modal-content"><div style="margin-bottom:10px; font-weight:bold;">メンバー選択</div><div class="member-grid" id="member-grid"></div><button class="modal-close-btn" onclick="closeModal('member-modal')">閉じる</button></div></div>
+    <div id="settings-modal" class="modal"><div class="modal-content"><div style="margin-bottom:10px; font-weight:bold;">メンバー追加</div><input type="text" id="input-mem-name" placeholder="名前" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444;"><input type="color" id="input-mem-color" value="#FFFF00" style="width:100%; height:40px; margin:8px 0; padding:0;"><button class="btn" style="background:#059669;" onclick="saveSettings()">追加</button><button class="modal-close-btn" onclick="closeModal('settings-modal')">閉じる</button></div></div>
 
     <canvas id="capture-canvas" style="display:none;"></canvas>
     <div id="print-area" style="display:none;"><img id="print-img"></div>
@@ -239,161 +87,96 @@
 
         let members = [];
         let selectedMember = null;
-        let currentStream = null;
-        let generatedCode = "";
+        let photoCount = 0;
+        let currentCode = ""; // 現在の撮影用認識ID
         let finalImageBlob = null;
-        let usedCodesToday = new Set();
+        let photoQueue = []; // 一括送信用の画像データ保持キュー
 
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
+            document.getElementById('display-term').innerText = params.get('term') || 'E';
+            document.getElementById('display-group').innerText = params.get('group') || 'misscarat2-0';
             
-            const term = params.get('term') || 'E';
-            const group = params.get('group') || 'misscarat2-0';
-
-            document.getElementById('display-term').innerText = term;
-            document.getElementById('display-group').innerText = group;
-            document.getElementById('display-date').innerText = getTodayFormatted();
-
-            generatedCode = generateUniqueCode(term);
-            document.getElementById('display-code').innerText = `ID: ${generatedCode}`;
-
-            const rawMembers = params.getAll('member');
-            rawMembers.forEach(raw => {
-                const parts = raw.split(':');
-                if (parts[0]) {
-                    const name = parts[0];
-                    const color = parts[1] ? parts[1].replace('#', '') : '2563eb';
-                    members.push({ name, color });
-                }
-            });
-
-            if (members.length > 0) {
-                selectMember(members[0]);
-            } else {
-                members.push({ name: 'ran', color: 'e11d48' });
-                selectMember(members[0]);
-            }
-
+            const raw = params.getAll('member');
+            raw.forEach(r => { const p = r.split(':'); members.push({name: p[0], color: p[1]?.replace('#','')||'2563eb'}); });
+            if(members.length === 0) members.push({name:'ran', color:'e11d48'});
+            
+            selectMember(members[0]);
+            generateNewID(); // 1枚目のIDを発行
             startRearCamera();
         });
 
-        function getTodayFormatted() {
-            const d = new Date();
-            return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-        }
-
-        function generateUniqueCode(term) {
+        // 認識IDの新規発行（端末ID + ランダム4桁アルファベット/数字 = 計5〜6桁）
+        function generateNewID() {
+            const term = document.getElementById('display-term').innerText;
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let code = '';
-            do {
-                let randomStr = '';
-                for (let i = 0; i < 4; i++) {
-                    randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
-                }
-                code = `${term}-${randomStr}`;
-            } while (usedCodesToday.has(code));
-
-            usedCodesToday.add(code);
-            return code;
+            let randomStr = ''; 
+            for(let i = 0; i < 4; i++) randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+            currentCode = `${term}-${randomStr}`;
+            document.getElementById('display-code').innerText = currentCode;
         }
 
-        async function startRearCamera() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-
-            const constraints = {
-                video: {
-                    facingMode: "environment",
-                    width: { ideal: 1080 },
-                    height: { ideal: 1440 }
-                }
-            };
-
-            try {
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                document.getElementById('webcam').srcObject = currentStream;
-            } catch (err) {
-                showStatus('カメラ起動失敗: ' + err.message, true);
-            }
+        function startRearCamera() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width:{ideal:1080}, height:{ideal:1440} } })
+                .then(stream => document.getElementById('webcam').srcObject = stream)
+                .catch(e => showStatus('カメラ起動失敗', true));
         }
 
-        // 背景色(HEX)の明暗を判定して文字色（白/黒）を返す関数
-        function getContrastTextColor(hexColor) {
-            const hex = hexColor.replace('#', '');
+        function getContrast(hex) {
             const r = parseInt(hex.substring(0, 2), 16) || 0;
             const g = parseInt(hex.substring(2, 4), 16) || 0;
             const b = parseInt(hex.substring(4, 6), 16) || 0;
-            
-            // 相対輝度計算 (黄色等の明るい色判定)
-            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            return brightness > 150 ? '#000000' : '#ffffff';
+            return ((r * 299 + g * 587 + b * 114) / 1000 > 150) ? '#000000' : '#ffffff';
         }
 
-        function selectMember(member) {
-            selectedMember = member;
+        function selectMember(m) {
+            selectedMember = m;
             const btn = document.getElementById('member-btn');
-            btn.innerText = member.name;
-            btn.style.backgroundColor = `#${member.color}`;
-            btn.style.color = getContrastTextColor(member.color);
+            btn.innerText = m.name;
+            btn.style.backgroundColor = `#${m.color}`;
+            btn.style.color = getContrast(m.color);
         }
 
+        // 1. 撮影（プレビュー生成）
         function takePhoto() {
-            const video = document.getElementById('webcam');
+            const v = document.getElementById('webcam');
             const canvas = document.getElementById('capture-canvas');
-            
-            const targetWidth = 1080;
-            const targetHeight = 1440;
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-
+            canvas.width = 1080; canvas.height = 1440;
             const ctx = canvas.getContext('2d');
             
-            const vWidth = video.videoWidth;
-            const vHeight = video.videoHeight;
-            let sWidth = vWidth;
-            let sHeight = vWidth * (4 / 3);
-            if (sHeight > vHeight) {
-                sHeight = vHeight;
-                sWidth = vHeight * (3 / 4);
-            }
-            const sx = (vWidth - sWidth) / 2;
-            const sy = (vHeight - sHeight) / 2;
+            ctx.drawImage(v, 0, 0, 1080, 1440);
 
-            ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+            // 画像下部に 日付 と 今回の認識ID を合成
+            const today = new Date();
+            const dateStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+            const codeStr = `ID:${currentCode}`;
 
-            const dateStr = getTodayFormatted();
-            const codeStr = `ID: ${generatedCode}`;
-
-            const gradient = ctx.createLinearGradient(0, targetHeight - 80, 0, targetHeight);
+            // 下部グラデーション背景
+            const gradient = ctx.createLinearGradient(0, 1360, 0, 1440);
             gradient.addColorStop(0, 'rgba(0,0,0,0)');
-            gradient.addColorStop(1, 'rgba(0,0,0,0.8)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0.85)');
             ctx.fillStyle = gradient;
-            ctx.fillRect(0, targetHeight - 80, targetWidth, 80);
+            ctx.fillRect(0, 1360, 1080, 80);
 
+            // 文字描画（左：日付、右：認識ID）
             ctx.font = 'bold 36px monospace';
             ctx.fillStyle = '#ffffff';
-            ctx.shadowColor = 'rgba(0,0,0,0.8)';
-            ctx.shadowBlur = 4;
-
-            ctx.fillText(dateStr, 30, targetHeight - 30);
+            ctx.fillText(dateStr, 30, 1410);
             ctx.textAlign = 'right';
-            ctx.fillText(codeStr, targetWidth - 30, targetHeight - 30);
+            ctx.fillText(codeStr, 1050, 1410);
 
             const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-            const previewImg = document.getElementById('preview-img');
-            previewImg.src = dataUrl;
+            document.getElementById('preview-img').src = dataUrl;
 
-            video.style.display = 'none';
-            previewImg.style.display = 'block';
+            v.style.display = 'none';
+            document.getElementById('preview-img').style.display = 'block';
             
             document.getElementById('btn-shutter').style.display = 'none';
-            document.getElementById('btn-upload').style.display = 'none';
             document.getElementById('btn-print-save').style.display = 'block';
             document.getElementById('btn-retake').style.display = 'block';
+            document.getElementById('btn-upload').style.display = 'none';
 
-            canvas.toBlob((blob) => { finalImageBlob = blob; }, 'image/jpeg', 0.92);
-            showStatus('プレビュー確認：印刷＆保存を行うか選択してください');
+            canvas.toBlob(b => finalImageBlob = b, 'image/jpeg', 0.92);
         }
 
         function resetToCamera() {
@@ -401,117 +184,114 @@
             document.getElementById('preview-img').style.display = 'none';
             
             document.getElementById('btn-shutter').style.display = 'block';
-            document.getElementById('btn-upload').style.display = 'block';
             document.getElementById('btn-print-save').style.display = 'none';
             document.getElementById('btn-retake').style.display = 'none';
-            
-            showStatus('');
+            document.getElementById('btn-upload').style.display = 'block';
         }
 
-        // 手動での一括送信ボタン押下処理
-        async function triggerBatchUpload() {
-            if (!finalImageBlob) {
-                showStatus('送信する画像がありません。先に撮影してください', true);
-                return;
-            }
-            showStatus('送信中...');
-            const success = await uploadToCloudinary(finalImageBlob);
-            if (success) {
-                showStatus('一括送信が完了しました！');
-            }
-        }
-
-        async function printAndSave() {
+        // 2. 印刷・保存（確定）
+        function printAndSave() {
             if (!finalImageBlob) return;
 
-            showStatus('処理中: 印刷指示＆保存中...');
+            // 確定した写真を送信待ちキューに追加
+            photoQueue.push({
+                blob: finalImageBlob,
+                code: currentCode,
+                member: selectedMember ? selectedMember.name : 'unknown'
+            });
 
-            const printImg = document.getElementById('print-img');
-            printImg.src = document.getElementById('preview-img').src;
-            
-            await uploadToCloudinary(finalImageBlob);
+            // 累計撮影カウンターを +1
+            photoCount++;
+            document.getElementById('display-count').innerText = photoCount;
 
+            // 印刷実行
+            document.getElementById('print-img').src = document.getElementById('preview-img').src;
             window.print();
 
-            const term = document.getElementById('display-term').innerText;
-            generatedCode = generateUniqueCode(term);
-            document.getElementById('display-code').innerText = `ID: ${generatedCode}`;
+            showStatus(`保存完了 [${currentCode}]`);
 
+            // 【重要】撮影・確定が行われたタイミングで、次の撮影用に認識IDを新しく更新！
+            generateNewID();
+
+            // カメラ表示に戻す
             resetToCamera();
-            showStatus('印刷指示と保存が完了しました');
+        }
+
+        // 3. 一括送信（イベント終了後に実行）
+        async function triggerBatchUpload() {
+            if (photoQueue.length === 0) {
+                showStatus('送信待ちのデータがありません', true);
+                return;
+            }
+
+            if (!confirm(`本日撮影した ${photoQueue.length} 枚のデータを一括送信しますか？`)) {
+                return;
+            }
+
+            showStatus(`送信中 (0/${photoQueue.length})...`);
+
+            let successCount = 0;
+            const groupName = document.getElementById('display-group').innerText;
+
+            for (let i = 0; i < photoQueue.length; i++) {
+                const item = photoQueue[i];
+                const fd = new FormData();
+                fd.append('file', item.blob);
+                fd.append('upload_preset', UPLOAD_PRESET);
+                fd.append('tags', `group_${groupName},code_${item.code},member_${item.member}`);
+
+                try {
+                    const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
+                    if (res.ok) {
+                        successCount++;
+                        showStatus(`送信中 (${successCount}/${photoQueue.length})...`);
+                    }
+                } catch (e) {
+                    console.error("送信エラー:", e);
+                }
+            }
+
+            if (successCount === photoQueue.length) {
+                photoQueue = []; // 送信完了後にキューをクリア
+                showStatus(`一括送信が完了しました！（全${successCount}枚）`);
+            } else {
+                showStatus(`一部送信失敗: ${successCount}/${photoQueue.length}枚完了`, true);
+            }
+        }
+
+        function showStatus(msg, err = false) {
+            const s = document.getElementById('status-msg');
+            s.innerText = msg;
+            s.style.color = err ? '#f87171' : '#4ade80';
         }
 
         function openMemberModal() {
-            const grid = document.getElementById('member-grid');
-            grid.innerHTML = '';
-
+            const g = document.getElementById('member-grid'); g.innerHTML = '';
             members.forEach(m => {
-                const btn = document.createElement('button');
-                btn.className = 'member-grid-btn';
-                btn.innerText = m.name;
-                btn.style.backgroundColor = `#${m.color}`;
-                btn.style.color = getContrastTextColor(m.color);
-                btn.onclick = () => {
-                    selectMember(m);
-                    closeModal('member-modal');
-                };
-                grid.appendChild(btn);
+                const b = document.createElement('button');
+                b.className = 'member-grid-btn';
+                b.innerText = m.name;
+                b.style.backgroundColor = `#${m.color}`;
+                b.style.color = getContrast(m.color);
+                b.onclick = () => { selectMember(m); closeModal('member-modal'); };
+                g.appendChild(b);
             });
-
             document.getElementById('member-modal').style.display = 'flex';
         }
 
-        function openSettingsModal() {
-            document.getElementById('settings-modal').style.display = 'flex';
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-
+        function openSettingsModal() { document.getElementById('settings-modal').style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        
         function saveSettings() {
-            const newMemName = document.getElementById('input-mem-name').value;
-            const newMemColor = document.getElementById('input-mem-color').value.replace('#','');
-
-            if (newMemName) {
-                const newMember = { name: newMemName, color: newMemColor };
-                members.push(newMember);
-                selectMember(newMember);
+            const n = document.getElementById('input-mem-name').value;
+            const c = document.getElementById('input-mem-color').value.replace('#','');
+            if (n) {
+                const m = { name: n, color: c };
+                members.push(m);
+                selectMember(m);
                 document.getElementById('input-mem-name').value = '';
             }
-
             closeModal('settings-modal');
-            showStatus('メンバーを追加しました');
-        }
-
-        async function uploadToCloudinary(blob) {
-            const currentGroup = document.getElementById('display-group').innerText;
-            const formData = new FormData();
-            formData.append('file', blob);
-            formData.append('upload_preset', UPLOAD_PRESET);
-            
-            let tags = [`group_${currentGroup}`, `code_${generatedCode}`];
-            if (selectedMember) tags.push(`member_${selectedMember.name}`);
-            
-            formData.append('tags', tags.join(','));
-
-            try {
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, {
-                    method: 'POST',
-                    body: formData
-                });
-                return res.ok;
-            } catch (err) {
-                console.error("保存失敗:", err);
-                showStatus('送信失敗: ネットワークエラー', true);
-                return false;
-            }
-        }
-
-        function showStatus(msg, isError = false) {
-            const statusDiv = document.getElementById('status-msg');
-            statusDiv.innerText = msg;
-            statusDiv.style.color = isError ? '#f87171' : '#4ade80';
         }
     </script>
 </body>
