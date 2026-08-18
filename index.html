@@ -78,54 +78,50 @@
     <script>
         let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 };
 
-        // URLパラメータからの初期設定適用
         function applyUrlParameters() {
             const params = new URLSearchParams(window.location.search);
             let updated = false;
 
-            if (params.has('term')) {
-                data.config.term = params.get('term');
-                document.getElementById('cfg-term').value = data.config.term;
-                updated = true;
-            }
-            if (params.has('cloud')) {
-                data.config.cloud = params.get('cloud');
-                document.getElementById('cfg-cloud').value = data.config.cloud;
-                updated = true;
-            }
-            if (params.has('preset')) {
-                data.config.preset = params.get('preset');
-                document.getElementById('cfg-preset').value = data.config.preset;
-                updated = true;
-            }
-            if (params.has('name')) {
-                const name = params.get('name');
+            if (params.has('term')) { data.config.term = params.get('term'); updated = true; }
+            if (params.has('cloud')) { data.config.cloud = params.get('cloud'); updated = true; }
+            if (params.has('preset')) { data.config.preset = params.get('preset'); updated = true; }
+            
+            // メンカラ指定付き (member=名前:カラーコード)
+            const members = params.getAll('member');
+            members.forEach(m => {
+                const parts = m.split(':');
+                const name = parts[0];
+                const color = parts[1] ? '#' + parts[1] : '#ff0000';
+                if (name && !data.idols.some(i => i.name === name)) {
+                    data.idols.push({ name: name, color: color });
+                    updated = true;
+                }
+            });
+
+            // 従来の名前のみ (name=名前)
+            const names = params.getAll('name');
+            names.forEach(name => {
                 if (!data.idols.some(i => i.name === name)) {
                     data.idols.push({ name: name, color: '#ff0000' });
                     updated = true;
                 }
-            }
+            });
 
-            if (updated) {
-                localStorage.setItem('app_data', JSON.stringify(data));
-            }
+            if (updated) { localStorage.setItem('app_data', JSON.stringify(data)); }
         }
 
         function generateUniqueCode() {
             const today = new Date().toISOString().split('T')[0];
             const storageKey = 'used_codes_' + today;
             let usedCodes = JSON.parse(localStorage.getItem(storageKey) || '[]');
-            
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let code = '';
-            
             do {
                 code = '';
                 for (let i = 0; i < 4; i++) {
                     code += chars.charAt(Math.floor(Math.random() * chars.length));
                 }
             } while (usedCodes.includes(code));
-
             usedCodes.push(code);
             localStorage.setItem(storageKey, JSON.stringify(usedCodes));
             return code;
@@ -156,19 +152,13 @@
                 display.style.color = 'white';
             }
             document.getElementById('photo-count').textContent = data.count;
-
-            // 入力フォームに現在の設定値を反映
             document.getElementById('cfg-term').value = data.config.term || '';
             document.getElementById('cfg-cloud').value = data.config.cloud || '';
             document.getElementById('cfg-preset').value = data.config.preset || '';
         }
 
         function saveSettings() {
-            data.config = { 
-                term: document.getElementById('cfg-term').value, 
-                cloud: document.getElementById('cfg-cloud').value, 
-                preset: document.getElementById('cfg-preset').value 
-            };
+            data.config = { term: document.getElementById('cfg-term').value, cloud: document.getElementById('cfg-cloud').value, preset: document.getElementById('cfg-preset').value };
             localStorage.setItem('app_data', JSON.stringify(data));
             alert('保存しました');
         }
@@ -236,11 +226,9 @@
             const ctx = canvas.getContext('2d');
             canvas.width = 600; canvas.height = 900;
             ctx.drawImage(video, 0, 0, 600, 900);
-            
             const now = new Date();
             const dateStr = now.toLocaleDateString();
             const code = generateUniqueCode();
-            
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
             ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
             ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${code}-${data.config.term}`, 20, 880);
@@ -256,7 +244,6 @@
             updateUI();
         }
 
-        // 初期化処理
         applyUrlParameters();
         renderSelect();
         start();
