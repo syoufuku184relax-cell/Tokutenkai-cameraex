@@ -14,11 +14,11 @@
         video { width: 100%; height: 100%; object-fit: cover; }
         
         .settings-panel { display: none; background: #1e1e1e; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 14px; text-align: left; }
-        input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #333; background: #000; color: #fff; }
+        input, select { width: 100%; padding: 8px; margin: 5px 0; border-radius: 4px; border: 1px solid #333; background: #000; color: #fff; box-sizing: border-box; }
         
         button { width: 100%; padding: 12px; margin-top: 5px; border: none; border-radius: 8px; color: #fff; font-weight: bold; cursor: pointer; }
         .btn-toggle { background: #6b7280; color: #fff; } 
-        .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; }
+        .btn-snap { background: #ef4444; font-size: 20px; padding: 20px; margin-top: 10px; }
         
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 1000; justify-content: center; align-items: center; }
         .modal-content { width: 90%; max-width: 400px; text-align: center; }
@@ -53,8 +53,9 @@
             <input type="text" id="cfg-term" placeholder="端末ID">
             <input type="text" id="cfg-cloud" placeholder="Cloud Name">
             <input type="text" id="cfg-preset" placeholder="Preset">
+            <input type="text" id="cfg-group" placeholder="グループ名 (フォルダ名)">
             <button onclick="saveSettings()" style="background:#4b5563;">設定を保存</button>
-            <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2;">📂 写真を一括送信</button>
+            <button onclick="document.getElementById('file-picker').click()" style="background:#0891b2; margin-top:10px;">📂 写真を一括送信</button>
             <button onclick="resetCount()" style="background:#7f1d1d; margin-top:15px;">🔄 枚数カウンターをリセット</button>
         </div>
 
@@ -67,8 +68,8 @@
     <div id="modal" class="modal">
         <div class="modal-content">
             <img id="modal-img">
-            <button onclick="confirmPrint()" style="background:#2563eb; margin-top:10px;">🖨 印刷 (保存してカウント)</button>
-            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b;">閉じる</button>
+            <button onclick="confirmPrint()" style="background:#2563eb; margin-top:10px;">💾 保存して完了 (カウント追加)</button>
+            <button onclick="document.getElementById('modal').style.display='none'" style="background:#991b1b; margin-top:5px;">撮り直す</button>
         </div>
     </div>
 
@@ -76,7 +77,7 @@
     <input type="file" id="file-picker" multiple accept="image/*" style="display:none">
 
     <script>
-        let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:''}, count: 0 };
+        let data = JSON.parse(localStorage.getItem('app_data')) || { idols: [], config: {term:'A', cloud:'', preset:'', group:''}, count: 0 };
 
         function applyUrlParameters() {
             const params = new URLSearchParams(window.location.search);
@@ -85,6 +86,7 @@
             if (params.has('term')) { data.config.term = params.get('term'); updated = true; }
             if (params.has('cloud')) { data.config.cloud = params.get('cloud'); updated = true; }
             if (params.has('preset')) { data.config.preset = params.get('preset'); updated = true; }
+            if (params.has('group')) { data.config.group = params.get('group'); updated = true; }
             
             // メンカラ指定付き (member=名前:カラーコード)
             const members = params.getAll('member');
@@ -94,15 +96,6 @@
                 const color = parts[1] ? '#' + parts[1] : '#ff0000';
                 if (name && !data.idols.some(i => i.name === name)) {
                     data.idols.push({ name: name, color: color });
-                    updated = true;
-                }
-            });
-
-            // 従来の名前のみ (name=名前)
-            const names = params.getAll('name');
-            names.forEach(name => {
-                if (!data.idols.some(i => i.name === name)) {
-                    data.idols.push({ name: name, color: '#ff0000' });
                     updated = true;
                 }
             });
@@ -155,10 +148,16 @@
             document.getElementById('cfg-term').value = data.config.term || '';
             document.getElementById('cfg-cloud').value = data.config.cloud || '';
             document.getElementById('cfg-preset').value = data.config.preset || '';
+            document.getElementById('cfg-group').value = data.config.group || '';
         }
 
         function saveSettings() {
-            data.config = { term: document.getElementById('cfg-term').value, cloud: document.getElementById('cfg-cloud').value, preset: document.getElementById('cfg-preset').value };
+            data.config = { 
+                term: document.getElementById('cfg-term').value, 
+                cloud: document.getElementById('cfg-cloud').value, 
+                preset: document.getElementById('cfg-preset').value,
+                group: document.getElementById('cfg-group').value
+            };
             localStorage.setItem('app_data', JSON.stringify(data));
             alert('保存しました');
         }
@@ -200,12 +199,25 @@
 
         document.getElementById('file-picker').onchange = async (e) => {
             const files = e.target.files;
+            if(!files.length) return;
             if(!data.config.cloud) return alert('Cloud Nameが未設定です');
+            
+            alert('送信を開始します。完了メッセージが出るまでお待ちください。');
+            
             for(let file of files) {
                 const fd = new FormData();
                 fd.append('file', file);
                 fd.append('upload_preset', data.config.preset);
-                await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud}/image/upload`, { method:'POST', body:fd });
+                
+                if (data.config.group) {
+                    fd.append('folder', data.config.group);
+                }
+                
+                try {
+                    await fetch(`https://api.cloudinary.com/v1_1/${data.config.cloud}/image/upload`, { method:'POST', body:fd });
+                } catch(err) {
+                    console.error(err);
+                }
             }
             alert('送信完了しました！枚数をリセットします。');
             data.count = 0;
@@ -232,12 +244,23 @@
             ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(0, 840, 600, 60);
             ctx.fillStyle = "white"; ctx.font = "20px sans-serif";
             ctx.fillText(`${document.getElementById('idol-select').value}  ${dateStr}  No.${code}-${data.config.term}`, 20, 880);
-            document.getElementById('modal-img').src = canvas.toDataURL();
+            document.getElementById('modal-img').src = canvas.toDataURL('image/png');
             document.getElementById('modal').style.display = 'flex';
         }
 
+        // 保存ボタンが押された時の処理（画像を自動ダウンロードして完了）
         function confirmPrint() {
-            window.print();
+            const modalImg = document.getElementById('modal-img');
+            const link = document.createElement('a');
+            const now = new Date();
+            const filename = `photo_${now.getTime()}.png`;
+            
+            link.href = modalImg.src;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
             data.count++;
             localStorage.setItem('app_data', JSON.stringify(data));
             document.getElementById('modal').style.display = 'none';
