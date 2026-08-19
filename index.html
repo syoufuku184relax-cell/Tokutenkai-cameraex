@@ -13,13 +13,27 @@
         .header-left { font-size: 0.85em; color: #4ade80; font-weight: bold; }
         .member-select-btn { padding: 5px 14px; border-radius: 16px; font-size: 0.85em; font-weight: bold; cursor: pointer; border: 1px solid #fff; transition: background-color 0.2s, color 0.2s; }
 
-        /* カメラプレビュー (3:4) */
-        #camera-container { position: relative; width: 100%; max-width: 380px; aspect-ratio: 3 / 4; background: #111; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.6); }
+        /* カメラプレビュー (3:4) - メンカラの太枠で囲む */
+        #camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 380px;
+            aspect-ratio: 3 / 4;
+            background: #111;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+            /* メンカラ表示用の太枠を設定 */
+            border: 4px solid #2563eb;
+            transition: border-color 0.2s ease;
+        }
+
         video, #preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
         #preview-img { display: none; }
 
-        /* フッター（次回撮影用の認識ID・未送信枚数） */
+        /* フッター（常時表示の日付・次回認識ID・未送信枚数） */
         .footer-info { width: 100%; max-width: 380px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; font-family: monospace; }
+        .id-display { color: #fff; font-weight: bold; }
 
         /* ボタンエリア */
         .controls { width: 100%; max-width: 380px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
@@ -53,13 +67,15 @@
         <button class="member-select-btn" id="member-btn" onclick="openMemberModal()">メンバー選択</button>
     </div>
 
+    <!-- カメラ枠：選択されたメンカラで囲む（実際の画像には影響しません） -->
     <div id="camera-container">
         <video id="webcam" autoplay playsinline></video>
         <img id="preview-img" alt="プレビュー">
     </div>
 
+    <!-- 撮影前から常時：年月日 ＋ 次回認識ID ＋ カウンター -->
     <div class="footer-info">
-        <div>次回ID: <span id="display-code" style="color:#fff; font-weight:bold;">--</span></div>
+        <div><span id="display-date">--/--/--</span> <span class="id-display" id="display-code">ID:--</span></div>
         <div>本日撮影累計: <span id="display-count" style="color:#4ade80; font-weight:bold;">0</span>枚</div>
     </div>
 
@@ -88,7 +104,7 @@
         let members = [];
         let selectedMember = null;
         let photoCount = 0;
-        let currentCode = ""; // 現在の撮影用認識ID
+        let currentCode = "";
         let finalImageBlob = null;
         let photoQueue = []; // 一括送信用の画像データ保持キュー
 
@@ -97,23 +113,34 @@
             document.getElementById('display-term').innerText = params.get('term') || 'E';
             document.getElementById('display-group').innerText = params.get('group') || 'misscarat2-0';
             
+            // 年月日のセット（撮影前から常時表示）
+            updateDateDisplay();
+
             const raw = params.getAll('member');
             raw.forEach(r => { const p = r.split(':'); members.push({name: p[0], color: p[1]?.replace('#','')||'2563eb'}); });
             if(members.length === 0) members.push({name:'ran', color:'e11d48'});
             
             selectMember(members[0]);
-            generateNewID(); // 1枚目のIDを発行
+            generateNewID(); // 1枚目のIDを発行（常時表示エリアにセットされる）
             startRearCamera();
         });
 
-        // 認識IDの新規発行（端末ID + ランダム4桁アルファベット/数字 = 計5〜6桁）
+        // 年月日表示の更新
+        function updateDateDisplay() {
+            const today = new Date();
+            const dateStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+            document.getElementById('display-date').innerText = dateStr;
+            return dateStr;
+        }
+
+        // 認識IDの新規発行（端末ID + ランダム4桁アルファベット/数字）
         function generateNewID() {
             const term = document.getElementById('display-term').innerText;
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let randomStr = ''; 
             for(let i = 0; i < 4; i++) randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
             currentCode = `${term}-${randomStr}`;
-            document.getElementById('display-code').innerText = currentCode;
+            document.getElementById('display-code').innerText = `ID:${currentCode}`;
         }
 
         function startRearCamera() {
@@ -122,6 +149,7 @@
                 .catch(e => showStatus('カメラ起動失敗', true));
         }
 
+        // メンカラ背景に応じた文字色（白/黒）の自動判定
         function getContrast(hex) {
             const r = parseInt(hex.substring(0, 2), 16) || 0;
             const g = parseInt(hex.substring(2, 4), 16) || 0;
@@ -129,12 +157,16 @@
             return ((r * 299 + g * 587 + b * 114) / 1000 > 150) ? '#000000' : '#ffffff';
         }
 
+        // メンバー選択（ボタンの配色とカメラ枠のメンカラ囲みを更新）
         function selectMember(m) {
             selectedMember = m;
             const btn = document.getElementById('member-btn');
             btn.innerText = m.name;
             btn.style.backgroundColor = `#${m.color}`;
             btn.style.color = getContrast(m.color);
+
+            // カメラ枠のボーダーカラーをメンカラに変更（プレビュー・選択画面用）
+            document.getElementById('camera-container').style.borderColor = `#${m.color}`;
         }
 
         // 1. 撮影（プレビュー生成）
@@ -146,9 +178,8 @@
             
             ctx.drawImage(v, 0, 0, 1080, 1440);
 
-            // 画像下部に 日付 と 今回の認識ID を合成
-            const today = new Date();
-            const dateStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+            // 画像下部に 日付 と 今回の認識ID を合成（枠線は含まれません）
+            const dateStr = updateDateDisplay();
             const codeStr = `ID:${currentCode}`;
 
             // 下部グラデーション背景
@@ -210,14 +241,14 @@
 
             showStatus(`保存完了 [${currentCode}]`);
 
-            // 【重要】撮影・確定が行われたタイミングで、次の撮影用に認識IDを新しく更新！
+            // 確定後、次の撮影用に認識IDを新しく更新！
             generateNewID();
 
             // カメラ表示に戻す
             resetToCamera();
         }
 
-        // 3. 一括送信（イベント終了後に実行）
+        // 3. 一括送信（イベント終了後に実行・完了時にカウンターもリセット）
         async function triggerBatchUpload() {
             if (photoQueue.length === 0) {
                 showStatus('送信待ちのデータがありません', true);
@@ -252,8 +283,12 @@
             }
 
             if (successCount === photoQueue.length) {
-                photoQueue = []; // 送信完了後にキューをクリア
-                showStatus(`一括送信が完了しました！（全${successCount}枚）`);
+                // 送信完了後にキューをクリア＆カウンターを0へリセット
+                photoQueue = [];
+                photoCount = 0;
+                document.getElementById('display-count').innerText = photoCount;
+
+                showStatus(`一括送信完了！カウンターを0にリセットしました`);
             } else {
                 showStatus(`一部送信失敗: ${successCount}/${photoQueue.length}枚完了`, true);
             }
