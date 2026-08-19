@@ -8,10 +8,12 @@
         * { box-sizing: border-box; }
         body { font-family: sans-serif; background: #000; color: #fff; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
 
+        /* ヘッダー (端末ID / グループ名 / メンバー選択) */
         .header-info { width: 100%; max-width: 380px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .header-left { font-size: 0.85em; color: #4ade80; font-weight: bold; }
         .member-select-btn { padding: 5px 14px; border-radius: 16px; font-size: 0.85em; font-weight: bold; cursor: pointer; border: 1px solid #fff; transition: background-color 0.2s, color 0.2s; }
 
+        /* カメラプレビュー (3:4) - メンカラの太枠で囲む */
         #camera-container {
             position: relative;
             width: 100%;
@@ -28,9 +30,11 @@
         video, #preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
         #preview-img { display: none; }
 
+        /* フッター（年月日・認識ID・未送信枚数） */
         .footer-info { width: 100%; max-width: 380px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; font-family: monospace; }
         .id-display { color: #fff; font-weight: bold; }
 
+        /* ボタンエリア */
         .controls { width: 100%; max-width: 380px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
         .btn { width: 100%; padding: 12px; font-size: 1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
         .btn-shutter { background: #e11d48; color: #fff; }
@@ -41,11 +45,17 @@
 
         #status-msg { text-align: center; font-size: 0.85em; color: #4ade80; min-height: 1.2em; }
         
+        /* モーダル */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
-        .modal-content { background: #1e1e1e; width: 90%; max-width: 340px; padding: 16px; border-radius: 12px; border: 1px solid #333; }
+        .modal-content { background: #1e1e1e; width: 90%; max-width: 350px; padding: 16px; border-radius: 12px; border: 1px solid #333; }
         .member-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 250px; overflow-y: auto; }
         .member-grid-btn { border: 2px solid #555; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
-        .modal-close-btn { background: #666; color: #fff; border: none; padding: 8px; width: 100%; border-radius: 6px; margin-top: 10px; cursor: pointer; }
+        .modal-close-btn { background: #666; color: #fff; border: none; padding: 8px; width: 100%; border-radius: 6px; margin-top: 12px; cursor: pointer; }
+
+        /* メンバー追加モーダル用 カラーパレット */
+        .color-palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0 12px 0; max-height: 180px; overflow-y: auto; }
+        .color-opt-btn { padding: 8px; border-radius: 6px; border: 2px solid transparent; font-size: 0.75em; font-weight: bold; cursor: pointer; text-align: center; }
+        .color-opt-btn.active { border-color: #fff; box-shadow: 0 0 6px #fff; }
 
         @media print {
             body * { visibility: hidden; }
@@ -61,14 +71,15 @@
         <button class="member-select-btn" id="member-btn" onclick="openMemberModal()">メンバー選択</button>
     </div>
 
+    <!-- カメラ枠：選択されたメンカラで囲む -->
     <div id="camera-container">
         <video id="webcam" autoplay playsinline></video>
         <img id="preview-img" alt="プレビュー">
     </div>
 
-    <!-- 修正：年月日とID表示、"次回"という文言を削除 -->
+    <!-- 撮影前から常時：年月日 ＋ 認識ID（「次回」は非表示） -->
     <div class="footer-info">
-        <div><span id="display-date">--/--/--</span> ID: <span class="id-display" id="display-code">--</span></div>
+        <div><span id="display-date">--/--/--</span> <span class="id-display" id="display-code">ID:--</span></div>
         <div>本日撮影累計: <span id="display-count" style="color:#4ade80; font-weight:bold;">0</span>枚</div>
     </div>
 
@@ -79,28 +90,27 @@
         <button id="btn-retake" class="btn btn-retake" onclick="resetToCamera()">撮り直す</button>
         
         <button id="btn-upload" class="btn btn-upload" onclick="triggerBatchUpload()">一括送信（イベント終了後）</button>
-        <button class="btn btn-settings" onclick="openSettingsModal()">メンバー追加</button>
+        <button class="btn btn-settings" onclick="openSettingsModal()">追加設定</button>
     </div>
 
+    <!-- メンバー選択モーダル -->
     <div id="member-modal" class="modal"><div class="modal-content"><div style="margin-bottom:10px; font-weight:bold;">メンバー選択</div><div class="member-grid" id="member-grid"></div><button class="modal-close-btn" onclick="closeModal('member-modal')">閉じる</button></div></div>
     
-    <!-- 修正：設定画面のメンカラ選択をリスト形式に -->
+    <!-- 現場用 メンバー追加モーダル -->
     <div id="settings-modal" class="modal">
         <div class="modal-content">
             <div style="margin-bottom:10px; font-weight:bold;">メンバー追加</div>
-            <input type="text" id="input-mem-name" placeholder="メンバー名" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444; margin-bottom:8px;">
-            <select id="input-mem-color" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444; margin-bottom:15px;">
-                <option value="e11d48">赤</option>
-                <option value="2563eb">青</option>
-                <option value="facc15">黄</option>
-                <option value="22c55e">緑</option>
-                <option value="db2777">ピンク</option>
-                <option value="9333ea">紫</option>
-                <option value="f97316">オレンジ</option>
-                <option value="ffffff">白</option>
-                <option value="000000">黒</option>
-            </select>
-            <button class="btn" style="background:#059669;" onclick="saveSettings()">追加する</button>
+            <input type="text" id="input-mem-name" placeholder="メンバー名" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444; border-radius:4px;">
+            
+            <div style="font-size:0.8em; color:#aaa; margin-top:10px;">メンカラ選択</div>
+            <div class="color-palette" id="color-palette"></div>
+            
+            <div id="custom-color-container" style="display:none; margin-bottom:10px; align-items:center; gap:8px;">
+                <span style="font-size:0.8em; color:#aaa;">カスタム色:</span>
+                <input type="color" id="input-custom-color" value="#10b981" style="width:100%; height:36px; padding:0; background:none; border:none; cursor:pointer;">
+            </div>
+
+            <button class="btn" style="background:#059669;" onclick="saveSettings()">メンバーを追加</button>
             <button class="modal-close-btn" onclick="closeModal('settings-modal')">閉じる</button>
         </div>
     </div>
@@ -112,12 +122,31 @@
         const CLOUD_NAME = "dfzxluvzy";
         const UPLOAD_PRESET = "CheerDream";
 
+        // 発行済み認識IDの管理Set（重複防止用）
+        const issuedCodes = new Set();
+
+        // メンカラ定義（設定URL発行アプリと共通：黒をエメラルドグリーンに変更）
+        const PRESET_COLORS = [
+            { name: "赤", hex: "e11d48" },
+            { name: "青", hex: "2563eb" },
+            { name: "黄", hex: "facc15" },
+            { name: "緑", hex: "16a34a" },
+            { name: "紫", hex: "9333ea" },
+            { name: "ピンク", hex: "ec4899" },
+            { name: "オレンジ", hex: "f97316" },
+            { name: "水色", hex: "06b6d4" },
+            { name: "白", hex: "ffffff" },
+            { name: "エメラルド", hex: "10b981" },
+            { name: "カスタム", hex: "custom" }
+        ];
+
         let members = [];
         let selectedMember = null;
         let photoCount = 0;
         let currentCode = "";
         let finalImageBlob = null;
         let photoQueue = [];
+        let selectedAddColor = "10b981"; // メンバー追加時の選択中メンカラ
 
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
@@ -131,8 +160,9 @@
             if(members.length === 0) members.push({name:'ran', color:'e11d48'});
             
             selectMember(members[0]);
-            generateNewID(); 
+            generateNewID(); // 重複チェック付きID生成
             startRearCamera();
+            initColorPalette();
         });
 
         function updateDateDisplay() {
@@ -142,13 +172,22 @@
             return dateStr;
         }
 
+        // 重複チェック付き認識IDの生成（端末ID + ランダム4桁）
         function generateNewID() {
             const term = document.getElementById('display-term').innerText;
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let randomStr = ''; 
-            for(let i = 0; i < 4; i++) randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
-            currentCode = `${term}-${randomStr}`;
-            document.getElementById('display-code').innerText = currentCode;
+            let newCode = '';
+
+            // 重複がないコードが生成されるまで繰り返す
+            do {
+                let randomStr = ''; 
+                for(let i = 0; i < 4; i++) randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
+                newCode = `${term}-${randomStr}`;
+            } while (issuedCodes.has(newCode));
+
+            issuedCodes.add(newCode);
+            currentCode = newCode;
+            document.getElementById('display-code').innerText = `ID:${currentCode}`;
         }
 
         function startRearCamera() {
@@ -171,6 +210,50 @@
             btn.style.backgroundColor = `#${m.color}`;
             btn.style.color = getContrast(m.color);
             document.getElementById('camera-container').style.borderColor = `#${m.color}`;
+        }
+
+        // メンバー追加用 カラーパレット生成
+        function initColorPalette() {
+            const palette = document.getElementById('color-palette');
+            palette.innerHTML = '';
+
+            PRESET_COLORS.forEach((c, index) => {
+                const btn = document.createElement('div');
+                btn.className = 'color-opt-btn';
+                btn.innerText = c.name;
+                
+                if (c.hex === 'custom') {
+                    btn.style.backgroundColor = '#333';
+                    btn.style.color = '#fff';
+                } else {
+                    btn.style.backgroundColor = `#${c.hex}`;
+                    btn.style.color = getContrast(c.hex);
+                }
+
+                if (index === 0) {
+                    btn.classList.add('active');
+                    selectedAddColor = c.hex;
+                }
+
+                btn.onclick = () => {
+                    document.querySelectorAll('.color-opt-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    const customContainer = document.getElementById('custom-color-container');
+                    if (c.hex === 'custom') {
+                        customContainer.style.display = 'flex';
+                        selectedAddColor = document.getElementById('input-custom-color').value.replace('#','');
+                    } else {
+                        customContainer.style.display = 'none';
+                        selectedAddColor = c.hex;
+                    }
+                };
+                palette.appendChild(btn);
+            });
+
+            document.getElementById('input-custom-color').addEventListener('input', (e) => {
+                selectedAddColor = e.target.value.replace('#','');
+            });
         }
 
         function takePhoto() {
@@ -236,6 +319,8 @@
             window.print();
 
             showStatus(`保存完了 [${currentCode}]`);
+
+            // 確定後、重複防止ロジックを経由して新しいIDを自動発行
             generateNewID();
             resetToCamera();
         }
@@ -246,9 +331,7 @@
                 return;
             }
 
-            if (!confirm(`本日撮影した ${photoQueue.length} 枚のデータを一括送信しますか？`)) {
-                return;
-            }
+            if (!confirm(`本日撮影した ${photoQueue.length} 枚のデータを一括送信しますか？`)) return;
 
             showStatus(`送信中 (0/${photoQueue.length})...`);
 
@@ -277,7 +360,6 @@
                 photoQueue = [];
                 photoCount = 0;
                 document.getElementById('display-count').innerText = photoCount;
-
                 showStatus(`一括送信完了！カウンターを0にリセットしました`);
             } else {
                 showStatus(`一部送信失敗: ${successCount}/${photoQueue.length}枚完了`, true);
@@ -309,9 +391,8 @@
         
         function saveSettings() {
             const n = document.getElementById('input-mem-name').value;
-            const c = document.getElementById('input-mem-color').value; // 修正：プルダウンの値を取得
             if (n) {
-                const m = { name: n, color: c };
+                const m = { name: n, color: selectedAddColor };
                 members.push(m);
                 selectMember(m);
                 document.getElementById('input-mem-name').value = '';
