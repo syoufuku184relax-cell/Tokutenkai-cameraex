@@ -343,8 +343,9 @@
                 const fd = new FormData();
                 fd.append('file', item.blob);
                 fd.append('upload_preset', UPLOAD_PRESET);
-                fd.append('tags', `group_${groupName},code_${item.code},member_${item.member}`);
-
+                const d = new Date();
+const dateTag = `date_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+fd.append('tags', `group_${groupName},code_${item.code},member_${item.member},${dateTag}`);
                 try {
                     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
                     if (res.ok) {
