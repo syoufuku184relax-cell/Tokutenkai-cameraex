@@ -30,7 +30,7 @@
         video, #preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
         #preview-img { display: none; }
 
-        /* フッター（年月日・認識ID・未送信枚数） */
+        /* フッター（年月日・認識ID・累計撮影枚数） */
         .footer-info { width: 100%; max-width: 380px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; font-family: monospace; }
         .id-display { color: #fff; font-weight: bold; }
 
@@ -71,13 +71,13 @@
         <button class="member-select-btn" id="member-btn" onclick="openMemberModal()">メンバー選択</button>
     </div>
 
-    <!-- カメラ枠：選択されたメンカラで囲む -->
+    <!-- カメラ枠：選択されたメンカラで囲む（印刷・保存データには含まれません） -->
     <div id="camera-container">
         <video id="webcam" autoplay playsinline></video>
         <img id="preview-img" alt="プレビュー">
     </div>
 
-    <!-- 撮影前から常時：年月日 ＋ 認識ID（「次回」は非表示） -->
+    <!-- 撮影前から常時表示：年月日 ＋ 認識ID -->
     <div class="footer-info">
         <div><span id="display-date">--/--/--</span> <span class="id-display" id="display-code">ID:--</span></div>
         <div>本日撮影累計: <span id="display-count" style="color:#4ade80; font-weight:bold;">0</span>枚</div>
@@ -125,7 +125,7 @@
         // 発行済み認識IDの管理Set（重複防止用）
         const issuedCodes = new Set();
 
-        // メンカラ定義（設定URL発行アプリと共通：黒をエメラルドグリーンに変更）
+        // メンカラ定義（設定URL発行アプリと統一）
         const PRESET_COLORS = [
             { name: "赤", hex: "e11d48" },
             { name: "青", hex: "2563eb" },
@@ -146,7 +146,7 @@
         let currentCode = "";
         let finalImageBlob = null;
         let photoQueue = [];
-        let selectedAddColor = "10b981"; // メンバー追加時の選択中メンカラ
+        let selectedAddColor = "10b981";
 
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
@@ -160,7 +160,7 @@
             if(members.length === 0) members.push({name:'ran', color:'e11d48'});
             
             selectMember(members[0]);
-            generateNewID(); // 重複チェック付きID生成
+            generateNewID();
             startRearCamera();
             initColorPalette();
         });
@@ -172,13 +172,12 @@
             return dateStr;
         }
 
-        // 重複チェック付き認識IDの生成（端末ID + ランダム4桁）
+        // 重複チェック付き認識IDの生成
         function generateNewID() {
             const term = document.getElementById('display-term').innerText;
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let newCode = '';
 
-            // 重複がないコードが生成されるまで繰り返す
             do {
                 let randomStr = ''; 
                 for(let i = 0; i < 4; i++) randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -212,7 +211,6 @@
             document.getElementById('camera-container').style.borderColor = `#${m.color}`;
         }
 
-        // メンバー追加用 カラーパレット生成
         function initColorPalette() {
             const palette = document.getElementById('color-palette');
             palette.innerHTML = '';
@@ -256,14 +254,34 @@
             });
         }
 
+        // 1. 撮影（歪み防止のアスペクト比中央クロップ処理付き）
         function takePhoto() {
             const v = document.getElementById('webcam');
             const canvas = document.getElementById('capture-canvas');
-            canvas.width = 1080; canvas.height = 1440;
+            canvas.width = 1080; 
+            canvas.height = 1440;
             const ctx = canvas.getContext('2d');
             
-            ctx.drawImage(v, 0, 0, 1080, 1440);
+            // アスペクト比計算による歪み防止処理
+            const vRatio = v.videoWidth / v.videoHeight;
+            const targetRatio = 1080 / 1440;
+            let sx, sy, sWidth, sHeight;
 
+            if (vRatio > targetRatio) {
+                sHeight = v.videoHeight;
+                sWidth = v.videoHeight * targetRatio;
+                sx = (v.videoWidth - sWidth) / 2;
+                sy = 0;
+            } else {
+                sWidth = v.videoWidth;
+                sHeight = v.videoWidth / targetRatio;
+                sx = 0;
+                sy = (v.videoHeight - sHeight) / 2;
+            }
+            
+            ctx.drawImage(v, sx, sy, sWidth, sHeight, 0, 0, 1080, 1440);
+
+            // 写真下部への文字合成
             const dateStr = updateDateDisplay();
             const codeStr = `ID:${currentCode}`;
 
@@ -271,7 +289,7 @@
             gradient.addColorStop(0, 'rgba(0,0,0,0)');
             gradient.addColorStop(1, 'rgba(0,0,0,0.85)');
             ctx.fillStyle = gradient;
-            ctx.fillRect(0, 1360, 1080, 80);
+            ctx.fillRect(0, 1360, 0, 1440, 1080, 80);
 
             ctx.font = 'bold 36px monospace';
             ctx.fillStyle = '#ffffff';
@@ -303,6 +321,7 @@
             document.getElementById('btn-upload').style.display = 'block';
         }
 
+        // 2. 印刷・保存（確定）
         function printAndSave() {
             if (!finalImageBlob) return;
 
@@ -320,11 +339,11 @@
 
             showStatus(`保存完了 [${currentCode}]`);
 
-            // 確定後、重複防止ロジックを経由して新しいIDを自動発行
             generateNewID();
             resetToCamera();
         }
 
+        // 3. 一括送信（Cloudinaryへ送信・完了時にカウンターリセット）
         async function triggerBatchUpload() {
             if (photoQueue.length === 0) {
                 showStatus('送信待ちのデータがありません', true);
@@ -343,9 +362,12 @@
                 const fd = new FormData();
                 fd.append('file', item.blob);
                 fd.append('upload_preset', UPLOAD_PRESET);
+                
+                // 日付タグ（date_YYYYMMDD）を追加して一括送信
                 const d = new Date();
-const dateTag = `date_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-fd.append('tags', `group_${groupName},code_${item.code},member_${item.member},${dateTag}`);
+                const dateTag = `date_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+                fd.append('tags', `group_${groupName},code_${item.code},member_${item.member},${dateTag}`);
+
                 try {
                     const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`, { method: 'POST', body: fd });
                     if (res.ok) {
