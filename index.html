@@ -8,12 +8,10 @@
         * { box-sizing: border-box; }
         body { font-family: sans-serif; background: #000; color: #fff; margin: 0; padding: 8px 12px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
 
-        /* ヘッダー (端末ID / グループ名 / メンバー選択) */
         .header-info { width: 100%; max-width: 380px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .header-left { font-size: 0.85em; color: #4ade80; font-weight: bold; }
         .member-select-btn { padding: 5px 14px; border-radius: 16px; font-size: 0.85em; font-weight: bold; cursor: pointer; border: 1px solid #fff; transition: background-color 0.2s, color 0.2s; }
 
-        /* カメラプレビュー (3:4) - メンカラの太枠で囲む */
         #camera-container {
             position: relative;
             width: 100%;
@@ -23,7 +21,6 @@
             border-radius: 10px;
             overflow: hidden;
             box-shadow: 0 4px 10px rgba(0,0,0,0.6);
-            /* メンカラ表示用の太枠を設定 */
             border: 4px solid #2563eb;
             transition: border-color 0.2s ease;
         }
@@ -31,11 +28,9 @@
         video, #preview-img { width: 100%; height: 100%; object-fit: cover; display: block; }
         #preview-img { display: none; }
 
-        /* フッター（常時表示の日付・次回認識ID・未送信枚数） */
         .footer-info { width: 100%; max-width: 380px; margin-top: 8px; display: flex; justify-content: space-between; font-size: 0.85em; color: #aaa; font-family: monospace; }
         .id-display { color: #fff; font-weight: bold; }
 
-        /* ボタンエリア */
         .controls { width: 100%; max-width: 380px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
         .btn { width: 100%; padding: 12px; font-size: 1em; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; }
         .btn-shutter { background: #e11d48; color: #fff; }
@@ -46,7 +41,6 @@
 
         #status-msg { text-align: center; font-size: 0.85em; color: #4ade80; min-height: 1.2em; }
         
-        /* モーダル */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 100; }
         .modal-content { background: #1e1e1e; width: 90%; max-width: 340px; padding: 16px; border-radius: 12px; border: 1px solid #333; }
         .member-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-height: 250px; overflow-y: auto; }
@@ -67,15 +61,14 @@
         <button class="member-select-btn" id="member-btn" onclick="openMemberModal()">メンバー選択</button>
     </div>
 
-    <!-- カメラ枠：選択されたメンカラで囲む（実際の画像には影響しません） -->
     <div id="camera-container">
         <video id="webcam" autoplay playsinline></video>
         <img id="preview-img" alt="プレビュー">
     </div>
 
-    <!-- 撮影前から常時：年月日 ＋ 次回認識ID ＋ カウンター -->
+    <!-- 修正：年月日とID表示、"次回"という文言を削除 -->
     <div class="footer-info">
-        <div><span id="display-date">--/--/--</span> <span class="id-display" id="display-code">ID:--</span></div>
+        <div><span id="display-date">--/--/--</span> ID: <span class="id-display" id="display-code">--</span></div>
         <div>本日撮影累計: <span id="display-count" style="color:#4ade80; font-weight:bold;">0</span>枚</div>
     </div>
 
@@ -85,14 +78,32 @@
         <button id="btn-print-save" class="btn btn-print-save" onclick="printAndSave()">印刷＆保存（確定）</button>
         <button id="btn-retake" class="btn btn-retake" onclick="resetToCamera()">撮り直す</button>
         
-        <!-- イベント終了後に電波の良い場所で押す一括送信ボタン -->
         <button id="btn-upload" class="btn btn-upload" onclick="triggerBatchUpload()">一括送信（イベント終了後）</button>
-        <button class="btn btn-settings" onclick="openSettingsModal()">追加設定</button>
+        <button class="btn btn-settings" onclick="openSettingsModal()">メンバー追加</button>
     </div>
 
-    <!-- モーダル各種 -->
     <div id="member-modal" class="modal"><div class="modal-content"><div style="margin-bottom:10px; font-weight:bold;">メンバー選択</div><div class="member-grid" id="member-grid"></div><button class="modal-close-btn" onclick="closeModal('member-modal')">閉じる</button></div></div>
-    <div id="settings-modal" class="modal"><div class="modal-content"><div style="margin-bottom:10px; font-weight:bold;">メンバー追加</div><input type="text" id="input-mem-name" placeholder="名前" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444;"><input type="color" id="input-mem-color" value="#FFFF00" style="width:100%; height:40px; margin:8px 0; padding:0;"><button class="btn" style="background:#059669;" onclick="saveSettings()">追加</button><button class="modal-close-btn" onclick="closeModal('settings-modal')">閉じる</button></div></div>
+    
+    <!-- 修正：設定画面のメンカラ選択をリスト形式に -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div style="margin-bottom:10px; font-weight:bold;">メンバー追加</div>
+            <input type="text" id="input-mem-name" placeholder="メンバー名" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444; margin-bottom:8px;">
+            <select id="input-mem-color" style="width:100%; padding:8px; background:#000; color:#fff; border:1px solid #444; margin-bottom:15px;">
+                <option value="e11d48">赤</option>
+                <option value="2563eb">青</option>
+                <option value="facc15">黄</option>
+                <option value="22c55e">緑</option>
+                <option value="db2777">ピンク</option>
+                <option value="9333ea">紫</option>
+                <option value="f97316">オレンジ</option>
+                <option value="ffffff">白</option>
+                <option value="000000">黒</option>
+            </select>
+            <button class="btn" style="background:#059669;" onclick="saveSettings()">追加する</button>
+            <button class="modal-close-btn" onclick="closeModal('settings-modal')">閉じる</button>
+        </div>
+    </div>
 
     <canvas id="capture-canvas" style="display:none;"></canvas>
     <div id="print-area" style="display:none;"><img id="print-img"></div>
@@ -106,14 +117,13 @@
         let photoCount = 0;
         let currentCode = "";
         let finalImageBlob = null;
-        let photoQueue = []; // 一括送信用の画像データ保持キュー
+        let photoQueue = [];
 
         window.addEventListener('DOMContentLoaded', () => {
             const params = new URLSearchParams(window.location.search);
             document.getElementById('display-term').innerText = params.get('term') || 'E';
             document.getElementById('display-group').innerText = params.get('group') || 'misscarat2-0';
             
-            // 年月日のセット（撮影前から常時表示）
             updateDateDisplay();
 
             const raw = params.getAll('member');
@@ -121,11 +131,10 @@
             if(members.length === 0) members.push({name:'ran', color:'e11d48'});
             
             selectMember(members[0]);
-            generateNewID(); // 1枚目のIDを発行（常時表示エリアにセットされる）
+            generateNewID(); 
             startRearCamera();
         });
 
-        // 年月日表示の更新
         function updateDateDisplay() {
             const today = new Date();
             const dateStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
@@ -133,14 +142,13 @@
             return dateStr;
         }
 
-        // 認識IDの新規発行（端末ID + ランダム4桁アルファベット/数字）
         function generateNewID() {
             const term = document.getElementById('display-term').innerText;
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let randomStr = ''; 
             for(let i = 0; i < 4; i++) randomStr += chars.charAt(Math.floor(Math.random() * chars.length));
             currentCode = `${term}-${randomStr}`;
-            document.getElementById('display-code').innerText = `ID:${currentCode}`;
+            document.getElementById('display-code').innerText = currentCode;
         }
 
         function startRearCamera() {
@@ -149,7 +157,6 @@
                 .catch(e => showStatus('カメラ起動失敗', true));
         }
 
-        // メンカラ背景に応じた文字色（白/黒）の自動判定
         function getContrast(hex) {
             const r = parseInt(hex.substring(0, 2), 16) || 0;
             const g = parseInt(hex.substring(2, 4), 16) || 0;
@@ -157,19 +164,15 @@
             return ((r * 299 + g * 587 + b * 114) / 1000 > 150) ? '#000000' : '#ffffff';
         }
 
-        // メンバー選択（ボタンの配色とカメラ枠のメンカラ囲みを更新）
         function selectMember(m) {
             selectedMember = m;
             const btn = document.getElementById('member-btn');
             btn.innerText = m.name;
             btn.style.backgroundColor = `#${m.color}`;
             btn.style.color = getContrast(m.color);
-
-            // カメラ枠のボーダーカラーをメンカラに変更（プレビュー・選択画面用）
             document.getElementById('camera-container').style.borderColor = `#${m.color}`;
         }
 
-        // 1. 撮影（プレビュー生成）
         function takePhoto() {
             const v = document.getElementById('webcam');
             const canvas = document.getElementById('capture-canvas');
@@ -178,18 +181,15 @@
             
             ctx.drawImage(v, 0, 0, 1080, 1440);
 
-            // 画像下部に 日付 と 今回の認識ID を合成（枠線は含まれません）
             const dateStr = updateDateDisplay();
             const codeStr = `ID:${currentCode}`;
 
-            // 下部グラデーション背景
             const gradient = ctx.createLinearGradient(0, 1360, 0, 1440);
             gradient.addColorStop(0, 'rgba(0,0,0,0)');
             gradient.addColorStop(1, 'rgba(0,0,0,0.85)');
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 1360, 1080, 80);
 
-            // 文字描画（左：日付、右：認識ID）
             ctx.font = 'bold 36px monospace';
             ctx.fillStyle = '#ffffff';
             ctx.fillText(dateStr, 30, 1410);
@@ -220,35 +220,26 @@
             document.getElementById('btn-upload').style.display = 'block';
         }
 
-        // 2. 印刷・保存（確定）
         function printAndSave() {
             if (!finalImageBlob) return;
 
-            // 確定した写真を送信待ちキューに追加
             photoQueue.push({
                 blob: finalImageBlob,
                 code: currentCode,
                 member: selectedMember ? selectedMember.name : 'unknown'
             });
 
-            // 累計撮影カウンターを +1
             photoCount++;
             document.getElementById('display-count').innerText = photoCount;
 
-            // 印刷実行
             document.getElementById('print-img').src = document.getElementById('preview-img').src;
             window.print();
 
             showStatus(`保存完了 [${currentCode}]`);
-
-            // 確定後、次の撮影用に認識IDを新しく更新！
             generateNewID();
-
-            // カメラ表示に戻す
             resetToCamera();
         }
 
-        // 3. 一括送信（イベント終了後に実行・完了時にカウンターもリセット）
         async function triggerBatchUpload() {
             if (photoQueue.length === 0) {
                 showStatus('送信待ちのデータがありません', true);
@@ -283,7 +274,6 @@
             }
 
             if (successCount === photoQueue.length) {
-                // 送信完了後にキューをクリア＆カウンターを0へリセット
                 photoQueue = [];
                 photoCount = 0;
                 document.getElementById('display-count').innerText = photoCount;
@@ -319,7 +309,7 @@
         
         function saveSettings() {
             const n = document.getElementById('input-mem-name').value;
-            const c = document.getElementById('input-mem-color').value.replace('#','');
+            const c = document.getElementById('input-mem-color').value; // 修正：プルダウンの値を取得
             if (n) {
                 const m = { name: n, color: c };
                 members.push(m);
